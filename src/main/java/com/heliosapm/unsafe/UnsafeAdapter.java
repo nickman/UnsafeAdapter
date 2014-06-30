@@ -174,7 +174,8 @@ public class UnsafeAdapter {
      */
     public static class MemoryAllocationReference extends PhantomReference<DeAllocateMe> {
     	/** The index of this reference */
-    	private final long index = refIndexFactory.incrementAndGet();
+    	@SuppressWarnings("synthetic-access")
+		private final long index = refIndexFactory.incrementAndGet();
     	/** The memory addresses owned by this reference */
     	private final long[][] addresses;
     	
@@ -209,22 +210,6 @@ public class UnsafeAdapter {
     }
     
     
-//    /** The memory allocation de-allocator task */
-//    private static final Runnable deallocator = new Runnable() {
-//    	public void run() {
-//    		latch.countDown();
-//    		LOG.info(StringHelper.banner("Started Unsafe Memory Manager Thread"));
-//    		while(true) {
-//    			try {
-//    				MemoryAllocationReference phantom = (MemoryAllocationReference) deallocations.remove();
-//    				refQueueSize.decrementAndGet();
-//    				phantom.clear();    				
-//    			} catch (Throwable t) {
-//    				if(Thread.interrupted()) Thread.interrupted();
-//    			}
-//    		}
-//    	}
-//    };
     
 //    private static final CountDownLatch latch = new CountDownLatch(1);
     
@@ -311,10 +296,26 @@ public class UnsafeAdapter {
         		BASELINE_ALLOCS = -1;
         		BASELINE_MEM = -1L;        		
         	}
+//          /** The memory allocation de-allocator task */
+//          private static final Runnable deallocator = new Runnable() {
+//          	public void run() {
+//          		latch.countDown();
+//          		LOG.info(StringHelper.banner("Started Unsafe Memory Manager Thread"));
+//          		while(true) {
+//          			try {
+//          				MemoryAllocationReference phantom = (MemoryAllocationReference) deallocations.remove();
+//          				refQueueSize.decrementAndGet();
+//          				phantom.clear();    				
+//          			} catch (Throwable t) {
+//          				if(Thread.interrupted()) Thread.interrupted();
+//          			}
+//          		}
+//          	}
+//          };
+        	
         	
         } catch (Exception e) {
             throw new AssertionError(e);
-        } finally {
         }
     }
     
