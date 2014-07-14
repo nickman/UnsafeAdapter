@@ -225,12 +225,8 @@ public class UnsafeAdapter {
 //    /** The memory allocation de-allocator task */
     private static final Runnable deallocator = new Runnable() {
     	public void run() {
-    		if(log!=null) {
-    			log.info("\n\t==================================\n\tStarted Unsafe Memory Manager Thread\n\t==================================\n");
-    		} else {
-    			System.err.println("No logger assigned");
-    			System.err.println("\n\t==================================\n\tStarted Unsafe Memory Manager Thread\n\t==================================\n");
-    		}
+    		log = LogManager.getLogManager().getLogger(UnsafeAdapter.class.getName());
+    		log.info("\n\t==================================\n\tStarted Unsafe Memory Manager Thread\n\t==================================\n");
     		while(true) {
     			try {
     				MemoryAllocationReference phantom = (MemoryAllocationReference) refQueue.remove();
