@@ -17,17 +17,22 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.LogManager;
+import java.util.logging.Logger;
+
+import javax.management.ObjectName;
 
 import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
+
+import sun.misc.Unsafe;
 
 import com.heliosapm.unsafe.Callbacks.BooleanCallable;
 import com.heliosapm.unsafe.Callbacks.ByteCallable;
 import com.heliosapm.unsafe.Callbacks.DoubleCallable;
 import com.heliosapm.unsafe.Callbacks.IntCallable;
 import com.heliosapm.unsafe.Callbacks.LongCallable;
-
-import sun.misc.Unsafe;
 
 /**
  * <p>Title: UnsafeAdapter</p>
@@ -87,6 +92,9 @@ public class UnsafeAdapter {
     
     /** The JVM's OS Process ID (PID) */
     public static final long JVM_PID = Long.parseLong(ManagementFactory.getRuntimeMXBean().getName().split("@")[0]);
+    
+    /** The JMX object name of the unsafe adapter's JMX MBean if track mem is enabled */
+    public static final ObjectName UNSAFE_OBJECT_NAME;
 	
 	/** The configured native memory tracking enablement  */
 	public static final boolean trackMem;
@@ -101,6 +109,11 @@ public class UnsafeAdapter {
 	static final AtomicLong totalMemoryAllocated;
 	/** The total native memory allocation overhead for alignment */
 	static final AtomicLong totalAlignmentOverhead;
+	/** The number of uncleared references */
+	static final AtomicInteger refQueueSize = new AtomicInteger(0);
+	
+	/** Static class logger */
+	static final Logger log;
 	
 	/** The system prop indicating that allocations should be tracked */
 	public static final String TRACK_ALLOCS_PROP = "unsafe.allocations.track";
@@ -125,7 +138,7 @@ public class UnsafeAdapter {
     public static final long BASELINE_MEM;
     
     /** The phantom reference queue */
-    private static final ReferenceQueue<DeAllocateMe> refQueue = new ReferenceQueue<DeAllocateMe>();
+    private static final ReferenceQueue<? super DeAllocateMe> refQueue = new ReferenceQueue<DeAllocateMe>();
     
     /** Empty long[] array const */
     private static final long[][] EMPTY_ADDRESSES = {{}};
@@ -210,30 +223,27 @@ public class UnsafeAdapter {
     
     
 //    /** The memory allocation de-allocator task */
-//    private static final Runnable deallocator = new Runnable() {
-//    	public void run() {
-//    		latch.countDown();
-//    		LOG.info(StringHelper.banner("Started Unsafe Memory Manager Thread"));
-//    		while(true) {
-//    			try {
-//    				MemoryAllocationReference phantom = (MemoryAllocationReference) deallocations.remove();
-//    				refQueueSize.decrementAndGet();
-//    				phantom.clear();    				
-//    			} catch (Throwable t) {
-//    				if(Thread.interrupted()) Thread.interrupted();
-//    			}
-//    		}
-//    	}
-//    };
-    
-//    private static final CountDownLatch latch = new CountDownLatch(1);
+    private static final Runnable deallocator = new Runnable() {
+    	public void run() {
+    		if(log!=null) {
+    			log.info("\n\t==================================\n\tStarted Unsafe Memory Manager Thread\n\t==================================\n");
+    		} else {
+    			System.err.println("No logger assigned");
+    			System.err.println("\n\t==================================\n\tStarted Unsafe Memory Manager Thread\n\t==================================\n");
+    		}
+    		while(true) {
+    			try {
+    				MemoryAllocationReference phantom = (MemoryAllocationReference) refQueue.remove();
+    				refQueueSize.decrementAndGet();
+    				phantom.clear();    				
+    			} catch (Throwable t) {
+    				if(Thread.interrupted()) Thread.interrupted();
+    			}
+    		}
+    	}
+    };
     
     public static List<MemoryAllocationReference> registerForDeAlloc(DeAllocateMe...deallocators) {
-//    	try {
-//    		latch.await();
-//    	} catch (Exception ex) {
-//    		throw new RuntimeException(ex);
-//    	}
     	if(deallocators==null || deallocators.length==0) return EMPTY_ALLOC_LIST;
     	List<MemoryAllocationReference> refs = new ArrayList<MemoryAllocationReference>();
     	for(DeAllocateMe dame: deallocators) {
@@ -251,12 +261,9 @@ public class UnsafeAdapter {
     
 
     static {
-//    	Thread t = new Thread(deallocator, "UnsafeAdapterDeallocatorThread");
-//    	t.setPriority(Thread.MAX_PRIORITY);
-//    	t.setDaemon(true);
-//    	t.start();
-
-        try {        	
+    	log = LogManager.getLogManager().getLogger(UnsafeAdapter.class.getName());
+        try {
+        	UNSAFE_OBJECT_NAME = new ObjectName(String.format("%s:%s=%s", UnsafeAdapter.class.getPackage().getName(), "service", UnsafeMemory.class.getSimpleName()));
             Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
             theUnsafe.setAccessible(true);
             UNSAFE = (Unsafe) theUnsafe.get(null);
@@ -291,6 +298,7 @@ public class UnsafeAdapter {
         		totalMemoryAllocated = new AtomicLong(0L);
         		totalAlignmentOverhead = new AtomicLong(0L);
         		try {
+        			ManagementFactory.getPlatformMBeanServer().registerMBean(unsafeMemoryStats, UNSAFE_OBJECT_NAME);
         			//JMXHelper.registerMBean(unsafeMemoryStats, JMXHelper.objectName("%s:%s=%s", UnsafeAdapter.class.getPackage().getName(), "service", UnsafeMemory.class.getSimpleName()));
         		} catch (Exception ex) {
         			System.err.println("Failed to register management interface for UnsafeAdapter. Will continue without. Stack trace follows.");
@@ -311,6 +319,10 @@ public class UnsafeAdapter {
         		BASELINE_ALLOCS = -1;
         		BASELINE_MEM = -1L;        		
         	}
+        	Thread t = new Thread(deallocator, "UnsafeAdapterDeallocatorThread");
+        	t.setPriority(Thread.MAX_PRIORITY);
+        	t.setDaemon(true);
+        	t.start();
         	
         } catch (Exception e) {
             throw new AssertionError(e);
