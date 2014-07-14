@@ -224,8 +224,9 @@ public class UnsafeAdapter {
     
 //    /** The memory allocation de-allocator task */
     private static final Runnable deallocator = new Runnable() {
-    	final Logger _log = LogManager.getLogManager().getLogger(UnsafeAdapter.class.getName());
+    	
     	public void run() {
+    		final Logger _log = LogManager.getLogManager().getLogger("UnsafeAdapter");
     		_log.info("\n\t==================================\n\tStarted Unsafe Memory Manager Thread\n\t==================================\n");
     		while(true) {
     			try {
