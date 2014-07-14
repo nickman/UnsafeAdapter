@@ -113,7 +113,7 @@ public class UnsafeAdapter {
 	static final AtomicInteger refQueueSize = new AtomicInteger(0);
 	
 	/** Static class logger */
-	static final Logger log;
+	static final Logger log  = LogManager.getLogManager().getLogger(UnsafeAdapter.class.getName());
 	
 	/** The system prop indicating that allocations should be tracked */
 	public static final String TRACK_ALLOCS_PROP = "unsafe.allocations.track";
@@ -224,14 +224,15 @@ public class UnsafeAdapter {
     
 //    /** The memory allocation de-allocator task */
     private static final Runnable deallocator = new Runnable() {
+    	final Logger _log = LogManager.getLogManager().getLogger(UnsafeAdapter.class.getName());
     	public void run() {
-    		log = LogManager.getLogManager().getLogger(UnsafeAdapter.class.getName());
-    		log.info("\n\t==================================\n\tStarted Unsafe Memory Manager Thread\n\t==================================\n");
+    		_log.info("\n\t==================================\n\tStarted Unsafe Memory Manager Thread\n\t==================================\n");
     		while(true) {
     			try {
     				MemoryAllocationReference phantom = (MemoryAllocationReference) refQueue.remove();
     				refQueueSize.decrementAndGet();
-    				phantom.clear();    				
+    				phantom.clear();  
+    				_log.info("Cleared Reference. Remaining Refs:" + refQueueSize);
     			} catch (Throwable t) {
     				if(Thread.interrupted()) Thread.interrupted();
     			}
@@ -257,7 +258,6 @@ public class UnsafeAdapter {
     
 
     static {
-    	log = LogManager.getLogManager().getLogger(UnsafeAdapter.class.getName());
         try {
         	UNSAFE_OBJECT_NAME = new ObjectName(String.format("%s:%s=%s", UnsafeAdapter.class.getPackage().getName(), "service", UnsafeMemory.class.getSimpleName()));
             Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
