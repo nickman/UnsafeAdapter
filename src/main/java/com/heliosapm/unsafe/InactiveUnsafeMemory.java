@@ -8,7 +8,7 @@ import java.util.Map;
  * <p>Description: Stub for unsafe memory allocation tracking when tracking is not enabled</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
- * <p><code>com.heliosapm.unsafe.UnsafeAdapter.InactiveUnsafeMemory</code></p>
+ * <p><code>com.heliosapm.unsafe.UnsafeAdapterOld.InactiveUnsafeMemory</code></p>
  */
 public class InactiveUnsafeMemory implements UnsafeMemoryMBean  {
 
@@ -82,7 +82,7 @@ public class InactiveUnsafeMemory implements UnsafeMemoryMBean  {
 	 */
 	@Override
 	public int getAddressSize() {
-		return UnsafeAdapter.addressSize();
+		return UnsafeAdapterOld.addressSize();
 	}
 
 	/**
@@ -91,7 +91,7 @@ public class InactiveUnsafeMemory implements UnsafeMemoryMBean  {
 	 */
 	@Override
 	public int getPageSize() {
-		return UnsafeAdapter.pageSize();
+		return UnsafeAdapterOld.pageSize();
 	}
 	
 }

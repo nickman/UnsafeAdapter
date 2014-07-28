@@ -28,7 +28,7 @@ import java.util.concurrent.Callable;
 
 /**
  * <p>Title: Callbacks</p>
- * <p>Description: A collection of callbacks for use with the {@link UnsafeAdapter}</p> 
+ * <p>Description: A collection of callbacks for use with the {@link UnsafeAdapterOld}</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>com.heliosapm.unsafe.Callbacks</code></p>

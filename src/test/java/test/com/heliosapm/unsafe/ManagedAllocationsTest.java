@@ -31,7 +31,7 @@ import javax.management.MBeanServerInvocationHandler;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import com.heliosapm.unsafe.UnsafeAdapter;
+import com.heliosapm.unsafe.UnsafeAdapterOld;
 import com.heliosapm.unsafe.UnsafeMemoryMBean;
 
 /**
@@ -52,12 +52,12 @@ public class ManagedAllocationsTest extends BaseTest {
 	@BeforeClass
 	public static void testIfManaged() throws Exception {
 		testManaged();
-		unsafeMemory = MBeanServerInvocationHandler.newProxyInstance(PLATFORM_AGENT, UnsafeAdapter.UNSAFE_OBJECT_NAME, UnsafeMemoryMBean.class, false);
+		unsafeMemory = MBeanServerInvocationHandler.newProxyInstance(PLATFORM_AGENT, UnsafeAdapterOld.UNSAFE_OBJECT_NAME, UnsafeMemoryMBean.class, false);
 		log("Acquired UnsafeMemoryMBean");
 	}
 	
 	private static void testManaged() throws Exception {
-		assumeTrue("", PLATFORM_AGENT.isRegistered(UnsafeAdapter.UNSAFE_OBJECT_NAME));
+		assumeTrue("", PLATFORM_AGENT.isRegistered(UnsafeAdapterOld.UNSAFE_OBJECT_NAME));
 	}
 	
 	/**
@@ -65,7 +65,7 @@ public class ManagedAllocationsTest extends BaseTest {
 	 */
 	@Test
 	public void testBaseline() {
-		
+		log("Baselines:  Allocs:%s,  Mem:%s", UnsafeAdapterOld.BASELINE_ALLOCS, UnsafeAdapterOld.BASELINE_MEM);
 	}
 	
 	

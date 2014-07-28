@@ -8,7 +8,7 @@ import java.util.Map;
  * <p>Description: Management stats for unsafe memory allocation</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
- * <p><code>com.heliosapm.unsafe.UnsafeAdapter.UnsafeMemory</code></p>
+ * <p><code>com.heliosapm.unsafe.UnsafeAdapterOld.UnsafeMemory</code></p>
  */
 public class UnsafeMemory implements UnsafeMemoryMBean  {
 	
@@ -50,7 +50,7 @@ public class UnsafeMemory implements UnsafeMemoryMBean  {
 	 */
 	@Override
 	public int getAddressSize() {
-		return UnsafeAdapter.addressSize();
+		return UnsafeAdapterOld.addressSize();
 	}
 
 	/**
@@ -59,7 +59,7 @@ public class UnsafeMemory implements UnsafeMemoryMBean  {
 	 */
 	@Override
 	public int getPageSize() {
-		return UnsafeAdapter.pageSize();
+		return UnsafeAdapterOld.pageSize();
 	}
 	
 	
@@ -70,8 +70,8 @@ public class UnsafeMemory implements UnsafeMemoryMBean  {
 	 */
 	@Override
 	public long getTotalAllocatedMemory() {
-		if(!UnsafeAdapter.trackMem) return -1L;
-		return UnsafeAdapter.totalMemoryAllocated.get()-UnsafeAdapter.BASELINE_MEM;
+		if(!UnsafeAdapterOld.trackMem) return -1L;
+		return UnsafeAdapterOld.totalMemoryAllocated.get()-UnsafeAdapterOld.BASELINE_MEM;
 	}
 	
 	/**
@@ -79,8 +79,8 @@ public class UnsafeMemory implements UnsafeMemoryMBean  {
 	 * @see com.heliosapm.unsafe.UnsafeMemoryMBean#getAlignedMemoryOverhead()
 	 */
 	public long getAlignedMemoryOverhead() {
-		if(!UnsafeAdapter.trackMem) return -1L;
-		return UnsafeAdapter.totalAlignmentOverhead.get();
+		if(!UnsafeAdapterOld.trackMem) return -1L;
+		return UnsafeAdapterOld.totalAlignmentOverhead.get();
 	}
 
 	/**
@@ -89,8 +89,8 @@ public class UnsafeMemory implements UnsafeMemoryMBean  {
 	 */
 	@Override
 	public int getTotalAllocationCount() {
-		if(!UnsafeAdapter.trackMem) return -1;
-		return UnsafeAdapter.memoryAllocations.size()-UnsafeAdapter.BASELINE_ALLOCS;
+		if(!UnsafeAdapterOld.trackMem) return -1;
+		return UnsafeAdapterOld.memoryAllocations.size()-UnsafeAdapterOld.BASELINE_ALLOCS;
 	}
 
 	/**
@@ -99,8 +99,8 @@ public class UnsafeMemory implements UnsafeMemoryMBean  {
 	 */
 	@Override
 	public long getTotalAllocatedMemoryKb() {
-		if(!UnsafeAdapter.trackMem) return -1L;
-		long t = UnsafeAdapter.totalMemoryAllocated.get();
+		if(!UnsafeAdapterOld.trackMem) return -1L;
+		long t = UnsafeAdapterOld.totalMemoryAllocated.get();
 		if(t<1) return 0L;
 		return t/1024;
 	}
@@ -111,8 +111,8 @@ public class UnsafeMemory implements UnsafeMemoryMBean  {
 	 */
 	@Override
 	public long getTotalAllocatedMemoryMb() {
-		if(!UnsafeAdapter.trackMem) return -1L;
-		long t = UnsafeAdapter.totalMemoryAllocated.get();
+		if(!UnsafeAdapterOld.trackMem) return -1L;
+		long t = UnsafeAdapterOld.totalMemoryAllocated.get();
 		if(t<1) return 0L;
 		return t/1024/1024;
 	}
@@ -122,7 +122,7 @@ public class UnsafeMemory implements UnsafeMemoryMBean  {
 	 * @return the number of retained phantom references to memory allocations
 	 */
 	public int getPendingRefs() {
-		return UnsafeAdapter.deAllocs.size();
+		return UnsafeAdapterOld.deAllocs.size();
 	}
 	
 	

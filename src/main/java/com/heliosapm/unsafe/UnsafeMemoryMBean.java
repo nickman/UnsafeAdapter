@@ -7,7 +7,7 @@ import java.util.Map;
  * <p>Description: JMX MBean interface for unsafe memory allocation trackers</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
- * <p><code>com.heliosapm.unsafe.UnsafeAdapter.UnsafeMemoryMBean</code></p>
+ * <p><code>com.heliosapm.unsafe.UnsafeAdapterOld.UnsafeMemoryMBean</code></p>
  */
 public interface UnsafeMemoryMBean {
 	
@@ -41,7 +41,7 @@ public interface UnsafeMemoryMBean {
 	public Map<String, Long> getState();
 	
 	/**
-	 * Returns the total off-heap allocated memory in bytes, not including the base line defined in {@link UnsafeAdapter#BASELINE_MEM}
+	 * Returns the total off-heap allocated memory in bytes, not including the base line defined in {@link UnsafeAdapterOld#BASELINE_MEM}
 	 * @return the total off-heap allocated memory
 	 */
 	public long getTotalAllocatedMemory();
@@ -66,7 +66,7 @@ public interface UnsafeMemoryMBean {
 	public long getTotalAllocatedMemoryMb();
 
 	/**
-	 * Returns the total number of existing allocations, not including the base line defined in {@link UnsafeAdapter#BASELINE_ALLOCS}
+	 * Returns the total number of existing allocations, not including the base line defined in {@link UnsafeAdapterOld#BASELINE_ALLOCS}
 	 * @return the total number of existing allocations
 	 */
 	public int getTotalAllocationCount();

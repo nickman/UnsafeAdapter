@@ -22,32 +22,27 @@
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org. 
  *
  */
-package test.com.heliosapm.unsafe;
-
-import org.junit.Test;
-import org.junit.Assert;
-
-import com.heliosapm.unsafe.UnsafeAdapterOld;
+package com.heliosapm.unsafe;
 
 /**
- * <p>Title: BasicAllocationsTest</p>
- * <p>Description: Basic allocations test case</p> 
+ * <p>Title: ExpiredMemoryAllocationException</p>
+ * <p>Description: Exception thrown when an operation attempts to manipulate a safe memory allocation that does not exist</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
- * <p><code>test.com.heliosapm.unsafe.BasicAllocationsTest</code></p>
+ * <p><code>com.heliosapm.unsafe.ExpiredMemoryAllocationException</code></p>
  */
 
-public class BasicAllocationsTest extends BaseTest {
+public class ExpiredMemoryAllocationException extends RuntimeException {
+
+	/**  */
+	private static final long serialVersionUID = -5642790615628007780L;
 
 	/**
-	 * Tests a long allocation
-	 * @throws Exception Thrown on any error
+	 * Creates a new ExpiredMemoryAllocationException
+	 * @param address The attempted addre
 	 */
-	@Test
-	public void testAllocatedLong() throws Exception {
-		final long address = UnsafeAdapterOld.allocateMemory(8);
-		long value = nextPosLong();
-		UnsafeAdapterOld.putLong(address, value);
-		Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapterOld.getLong(address));
+	public ExpiredMemoryAllocationException(long address) {
+		super("SafeMemoryAllocation at address [" + address + "] is invalid");
 	}
+
 }
