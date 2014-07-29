@@ -28,16 +28,12 @@ import java.lang.management.ManagementFactory;
 import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
-
-import com.heliosapm.unsafe.UnsafeAdapterOld.MemoryAllocationReference;
 
 import sun.misc.Unsafe;
 
@@ -49,7 +45,7 @@ import sun.misc.Unsafe;
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>com.heliosapm.unsafe.DefaultUnsafeAdapterImpl</code></p>
  */
-
+@SuppressWarnings("restriction")
 class DefaultUnsafeAdapterImpl implements Runnable {
 	// =========================================================
 	//  Singleton
@@ -456,6 +452,32 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 	
 	
 	//===========================================================================================================
+	//	Byte Write  Ops
+	//===========================================================================================================		
+	
+	/**
+	 * Stores a value into a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from #allocateMemory , the
+	 * results are undefined.
+	 * @param address the address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putByte(long, byte)
+	 */
+	public void putByte(long address, byte value) {
+		UNSAFE.putByte(address, value);
+	}
+	
+	/**
+	 * Volatile version of {@link #putByte(long, byte)}
+	 * @param address The address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putByteVolatile(java.lang.Object, long, byte)
+	 */
+	public void putByteVolatile(long address, byte value) {
+		UNSAFE.putByteVolatile(null, address, value);
+	}
+	
+	//===========================================================================================================
 	//	Boolean Read Ops
 	//===========================================================================================================	
 	
@@ -479,6 +501,33 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 	public boolean getBooleanVolatile(long address) {
 		return UNSAFE.getBooleanVolatile(null, address);
 	}
+	
+	//===========================================================================================================
+	//	Byte Write Ops
+	//===========================================================================================================		
+	
+	/**
+	 * Stores a value into a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from #allocateMemory , the
+	 * results are undefined.
+	 * @param address the address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putBoolean(java.lang.Object, long, boolean)
+	 */
+	public void putBoolean(long address, boolean value) {
+		UNSAFE.putBoolean(null, address, value);
+	}
+	
+	/**
+	 * Volatile version of {@link #putBoolean(long, boolean)}
+	 * @param address The address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putBooleanVolatile(java.lang.Object, long, boolean)
+	 */
+	public void putBooleanVolatile(long address, boolean value) {
+		UNSAFE.putBooleanVolatile(null, address, value);
+	}
+	
 	
 	//===========================================================================================================
 	//	Short Read Ops
@@ -506,6 +555,33 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 	}
 	
 	//===========================================================================================================
+	//	Short Write Ops
+	//===========================================================================================================		
+	
+	/**
+	 * Stores a value into a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from #allocateMemory , the
+	 * results are undefined.
+	 * @param address the address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putShort(java.lang.Object, long, short)
+	 */
+	public void putShort(long address, short value) {
+		UNSAFE.putShort(address, value);
+	}
+	
+	/**
+	 * Volatile version of {@link #putShort(long, short)}
+	 * @param address The address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putShortVolatile(java.lang.Object, long, short)
+	 */
+	public void putShortVolatile(long address, short value) {
+		UNSAFE.putShortVolatile(null, address, value);
+	}
+	
+	
+	//===========================================================================================================
 	//	Char Read Ops
 	//===========================================================================================================
 
@@ -530,6 +606,32 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 	 */
 	public char getCharVolatile(long address) {
 		return UNSAFE.getCharVolatile(null, address);
+	}
+	
+	//===========================================================================================================
+	//	Char Write Ops
+	//===========================================================================================================		
+	
+	/**
+	 * Stores a value into a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from #allocateMemory , the
+	 * results are undefined.
+	 * @param address the address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putChar(java.lang.Object, long, char)
+	 */
+	public void putChar(long address, char value) {
+		UNSAFE.putChar(address, value);
+	}
+	
+	/**
+	 * Volatile version of {@link #putChar(long, char)}
+	 * @param address The address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putCharVolatile(java.lang.Object, long, char)
+	 */
+	public void putCharVolatile(long address, char value) {
+		UNSAFE.putCharVolatile(null, address, value);
 	}
 	
 	
@@ -561,6 +663,33 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 	}
 	
 	//===========================================================================================================
+	//	Int Write Ops
+	//===========================================================================================================		
+	
+	/**
+	 * Stores a value into a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from #allocateMemory , the
+	 * results are undefined.
+	 * @param address the address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putInt(long, int)
+	 */
+	public void putInt(long address, int value) {
+		UNSAFE.putInt(address, value);
+	}
+	
+	/**
+	 * Volatile version of {@link #putInt(long, int)}
+	 * @param address The address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putIntVolatile(java.lang.Object, long, int)
+	 */
+	public void putIntVolatile(long address, int value) {
+		UNSAFE.putIntVolatile(null, address, value);
+	}
+	
+	
+	//===========================================================================================================
 	//	Float Read Ops
 	//===========================================================================================================
 	
@@ -588,6 +717,33 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 	}
 	
 	//===========================================================================================================
+	//	Float Write Ops
+	//===========================================================================================================		
+	
+	/**
+	 * Stores a value to a given memory address.  If the address is zero, or
+	 * does not point to a block obtained from #allocateMemory , the
+	 * results are undefined.
+	 * @param address the address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putFloat(long, float)
+	 */
+	public void putFloat(long address, float value) {
+		UNSAFE.putFloat(address, value);
+	}
+	
+	/**
+	 * Volatile version of {@link #putFloat(long, float)}
+	 * @param address The address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putFloatVolatile(java.lang.Object, long, float)
+	 */
+	public void putFloatVolatile(long address, float value) {
+		UNSAFE.putFloatVolatile(null, address, value);
+	}
+	
+	
+	//===========================================================================================================
 	//	Long Read Ops
 	//===========================================================================================================
 	
@@ -605,13 +761,39 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 
 
 	/**
-	 * Volatile version of {@link #getFloat(long)}.
+	 * Volatile version of {@link #getLong(long)}.
 	 * @param address The address to read the value from
 	 * @return the read value
-	 * @see sun.misc.Unsafe#getFloatVolatile(java.lang.Object, long)
+	 * @see sun.misc.Unsafe#getLongVolatile(java.lang.Object, long)
 	 */
 	public long getLongVolatile(long address) {
 		return UNSAFE.getLongVolatile(null, address);
+	}
+	
+	//===========================================================================================================
+	//	Long Write Ops
+	//===========================================================================================================		
+	
+	/**
+	 * Stores a value to a given memory address.  If the address is zero, or
+	 * does not point to a block obtained from #allocateMemory , the
+	 * results are undefined.
+	 * @param address the address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putLong(long, long)
+	 */
+	public void putLong(long address, long value) {
+		UNSAFE.putLong(address, value);
+	}
+	
+	/**
+	 * Volatile version of {@link #putLong(long, long)}
+	 * @param address The address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putLongVolatile(java.lang.Object, long, long)
+	 */
+	public void putLongVolatile(long address, long value) {
+		UNSAFE.putLongVolatile(null, address, value);
 	}
 	
 	//===========================================================================================================
@@ -624,118 +806,107 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 	 * results are undefined. 
 	 * @param address The address to read the value from
 	 * @return the read value
-	 * @see sun.misc.Unsafe#getLong(long)
-	 */
-	public long getLong(long address) {
-		return UNSAFE.getLong(address);
+	 * @see sun.misc.Unsafe#getDouble(long)
+	 */	
+	public double getDouble(long address) {
+		return UNSAFE.getDouble(address);
 	}
 
 
 	/**
-	 * Volatile version of {@link #getFloat(long)}.
+	 * Volatile version of {@link #getDouble(long)}.
 	 * @param address The address to read the value from
 	 * @return the read value
-	 * @see sun.misc.Unsafe#getFloatVolatile(java.lang.Object, long)
-	 */
-	public long getLongVolatile(long address) {
-		return UNSAFE.getLongVolatile(null, address);
-	}
-
-	/**
-	 * @param arg0
-	 * @return
-	 * @see sun.misc.Unsafe#getDouble(long)
-	 */
-	public double getDouble(long arg0) {
-		return UNSAFE.getDouble(arg0);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @deprecated
-	 * @see sun.misc.Unsafe#getDouble(java.lang.Object, int)
-	 */
-	public double getDouble(Object arg0, int arg1) {
-		return UNSAFE.getDouble(arg0, arg1);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @see sun.misc.Unsafe#getDouble(java.lang.Object, long)
-	 */
-	public double getDouble(Object arg0, long arg1) {
-		return UNSAFE.getDouble(arg0, arg1);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
 	 * @see sun.misc.Unsafe#getDoubleVolatile(java.lang.Object, long)
 	 */
-	public double getDoubleVolatile(Object arg0, long arg1) {
-		return UNSAFE.getDoubleVolatile(arg0, arg1);
+	public double getDoubleVolatile(long address) {
+		return UNSAFE.getDoubleVolatile(null, address);
 	}
-
-
-
+	
+	//===========================================================================================================
+	//	Double Write Ops
+	//===========================================================================================================		
+	
 	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @see sun.misc.Unsafe#getLoadAverage(double[], int)
+	 * Stores a value to a given memory address.  If the address is zero, or
+	 * does not point to a block obtained from #allocateMemory , the
+	 * results are undefined.
+	 * @param address the address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putDouble(long, double)
 	 */
-	public int getLoadAverage(double[] arg0, int arg1) {
-		return UNSAFE.getLoadAverage(arg0, arg1);
+	public void putDouble(long address, double value) {
+		UNSAFE.putDouble(address, value);
 	}
-
-
+	
 	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @deprecated
-	 * @see sun.misc.Unsafe#getObject(java.lang.Object, int)
+	 * Volatile version of {@link #putDouble(long, double)}
+	 * @param address The address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putDoubleVolatile(java.lang.Object, long, double)
 	 */
-	public Object getObject(Object arg0, int arg1) {
-		return UNSAFE.getObject(arg0, arg1);
+	public void putDoubleVolatile(long address, double value) {
+		UNSAFE.putDoubleVolatile(null, address, value);
 	}
-
+	
+	
+	//===========================================================================================================
+	//	Object Read Ops
+	//===========================================================================================================
+	
 	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
+	 * Fetches a value from a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from {@link #allocateMemory} , the
+	 * results are undefined. 
+	 * @param address The address to read the value from
+	 * @return the read value
 	 * @see sun.misc.Unsafe#getObject(java.lang.Object, long)
-	 */
-	public Object getObject(Object arg0, long arg1) {
-		return UNSAFE.getObject(arg0, arg1);
+	 */	
+	public Object getObject(long address) {
+		return UNSAFE.getObject(null, address);
 	}
 
+
 	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
+	 * Volatile version of {@link #getObject(long)}.
+	 * @param address The address to read the value from
+	 * @return the read value
 	 * @see sun.misc.Unsafe#getObjectVolatile(java.lang.Object, long)
 	 */
-	public Object getObjectVolatile(Object arg0, long arg1) {
-		return UNSAFE.getObjectVolatile(arg0, arg1);
+	public Object getObjectVolatile(long address) {
+		return UNSAFE.getObjectVolatile(null, address);
 	}
-
-
-
-
-
+	
+	//===========================================================================================================
+	//	Object Write Ops
+	//===========================================================================================================		
+	
 	/**
-	 * @return
-	 * @see java.lang.Object#hashCode()
+	 * Stores a value to a given memory address.  If the address is zero, or
+	 * does not point to a block obtained from #allocateMemory , the
+	 * results are undefined.
+	 * @param address the address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putObject(java.lang.Object, long, java.lang.Object)
 	 */
-	public int hashCode() {
-		return UNSAFE.hashCode();
+	public void putObject(long address, Object value) {
+		UNSAFE.putObject(null, address, value);
 	}
+	
+	/**
+	 * Volatile version of {@link #putObject(long, Object)}
+	 * @param address The address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putObjectVolatile(java.lang.Object, long, Object)
+	 */
+	public void putObjectVolatile(long address, Object value) {
+		UNSAFE.putObjectVolatile(null, address, value);
+	}
+
+
+	//===========================================================================================================
+
+
 
 	/**
 	 * @param arg0
@@ -780,307 +951,7 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 		UNSAFE.putAddress(arg0, arg1);
 	}
 
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @deprecated
-	 * @see sun.misc.Unsafe#putBoolean(java.lang.Object, int, boolean)
-	 */
-	public void putBoolean(Object arg0, int arg1, boolean arg2) {
-		UNSAFE.putBoolean(arg0, arg1, arg2);
-	}
 
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putBoolean(java.lang.Object, long, boolean)
-	 */
-	public void putBoolean(Object arg0, long arg1, boolean arg2) {
-		UNSAFE.putBoolean(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putBooleanVolatile(java.lang.Object, long, boolean)
-	 */
-	public void putBooleanVolatile(Object arg0, long arg1, boolean arg2) {
-		UNSAFE.putBooleanVolatile(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @see sun.misc.Unsafe#putByte(long, byte)
-	 */
-	public void putByte(long arg0, byte arg1) {
-		UNSAFE.putByte(arg0, arg1);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @deprecated
-	 * @see sun.misc.Unsafe#putByte(java.lang.Object, int, byte)
-	 */
-	public void putByte(Object arg0, int arg1, byte arg2) {
-		UNSAFE.putByte(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putByte(java.lang.Object, long, byte)
-	 */
-	public void putByte(Object arg0, long arg1, byte arg2) {
-		UNSAFE.putByte(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putByteVolatile(java.lang.Object, long, byte)
-	 */
-	public void putByteVolatile(Object arg0, long arg1, byte arg2) {
-		UNSAFE.putByteVolatile(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @see sun.misc.Unsafe#putChar(long, char)
-	 */
-	public void putChar(long arg0, char arg1) {
-		UNSAFE.putChar(arg0, arg1);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @deprecated
-	 * @see sun.misc.Unsafe#putChar(java.lang.Object, int, char)
-	 */
-	public void putChar(Object arg0, int arg1, char arg2) {
-		UNSAFE.putChar(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putChar(java.lang.Object, long, char)
-	 */
-	public void putChar(Object arg0, long arg1, char arg2) {
-		UNSAFE.putChar(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putCharVolatile(java.lang.Object, long, char)
-	 */
-	public void putCharVolatile(Object arg0, long arg1, char arg2) {
-		UNSAFE.putCharVolatile(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @see sun.misc.Unsafe#putDouble(long, double)
-	 */
-	public void putDouble(long arg0, double arg1) {
-		UNSAFE.putDouble(arg0, arg1);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @deprecated
-	 * @see sun.misc.Unsafe#putDouble(java.lang.Object, int, double)
-	 */
-	public void putDouble(Object arg0, int arg1, double arg2) {
-		UNSAFE.putDouble(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putDouble(java.lang.Object, long, double)
-	 */
-	public void putDouble(Object arg0, long arg1, double arg2) {
-		UNSAFE.putDouble(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putDoubleVolatile(java.lang.Object, long, double)
-	 */
-	public void putDoubleVolatile(Object arg0, long arg1, double arg2) {
-		UNSAFE.putDoubleVolatile(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @see sun.misc.Unsafe#putFloat(long, float)
-	 */
-	public void putFloat(long arg0, float arg1) {
-		UNSAFE.putFloat(arg0, arg1);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @deprecated
-	 * @see sun.misc.Unsafe#putFloat(java.lang.Object, int, float)
-	 */
-	public void putFloat(Object arg0, int arg1, float arg2) {
-		UNSAFE.putFloat(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putFloat(java.lang.Object, long, float)
-	 */
-	public void putFloat(Object arg0, long arg1, float arg2) {
-		UNSAFE.putFloat(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putFloatVolatile(java.lang.Object, long, float)
-	 */
-	public void putFloatVolatile(Object arg0, long arg1, float arg2) {
-		UNSAFE.putFloatVolatile(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @see sun.misc.Unsafe#putInt(long, int)
-	 */
-	public void putInt(long arg0, int arg1) {
-		UNSAFE.putInt(arg0, arg1);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @deprecated
-	 * @see sun.misc.Unsafe#putInt(java.lang.Object, int, int)
-	 */
-	public void putInt(Object arg0, int arg1, int arg2) {
-		UNSAFE.putInt(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putInt(java.lang.Object, long, int)
-	 */
-	public void putInt(Object arg0, long arg1, int arg2) {
-		UNSAFE.putInt(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putIntVolatile(java.lang.Object, long, int)
-	 */
-	public void putIntVolatile(Object arg0, long arg1, int arg2) {
-		UNSAFE.putIntVolatile(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @see sun.misc.Unsafe#putLong(long, long)
-	 */
-	public void putLong(long arg0, long arg1) {
-		UNSAFE.putLong(arg0, arg1);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @deprecated
-	 * @see sun.misc.Unsafe#putLong(java.lang.Object, int, long)
-	 */
-	public void putLong(Object arg0, int arg1, long arg2) {
-		UNSAFE.putLong(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putLong(java.lang.Object, long, long)
-	 */
-	public void putLong(Object arg0, long arg1, long arg2) {
-		UNSAFE.putLong(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putLongVolatile(java.lang.Object, long, long)
-	 */
-	public void putLongVolatile(Object arg0, long arg1, long arg2) {
-		UNSAFE.putLongVolatile(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @deprecated
-	 * @see sun.misc.Unsafe#putObject(java.lang.Object, int, java.lang.Object)
-	 */
-	public void putObject(Object arg0, int arg1, Object arg2) {
-		UNSAFE.putObject(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putObject(java.lang.Object, long, java.lang.Object)
-	 */
-	public void putObject(Object arg0, long arg1, Object arg2) {
-		UNSAFE.putObject(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putObjectVolatile(java.lang.Object, long, java.lang.Object)
-	 */
-	public void putObjectVolatile(Object arg0, long arg1, Object arg2) {
-		UNSAFE.putObjectVolatile(arg0, arg1, arg2);
-	}
 
 	/**
 	 * @param arg0
@@ -1112,45 +983,6 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 		UNSAFE.putOrderedObject(arg0, arg1, arg2);
 	}
 
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @see sun.misc.Unsafe#putShort(long, short)
-	 */
-	public void putShort(long arg0, short arg1) {
-		UNSAFE.putShort(arg0, arg1);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @deprecated
-	 * @see sun.misc.Unsafe#putShort(java.lang.Object, int, short)
-	 */
-	public void putShort(Object arg0, int arg1, short arg2) {
-		UNSAFE.putShort(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putShort(java.lang.Object, long, short)
-	 */
-	public void putShort(Object arg0, long arg1, short arg2) {
-		UNSAFE.putShort(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putShortVolatile(java.lang.Object, long, short)
-	 */
-	public void putShortVolatile(Object arg0, long arg1, short arg2) {
-		UNSAFE.putShortVolatile(arg0, arg1, arg2);
-	}
 
 	/**
 	 * @param arg0

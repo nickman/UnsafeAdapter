@@ -38,6 +38,7 @@ import sun.misc.Unsafe;
  * <p><code>com.heliosapm.unsafe.UnsafeAdapter</code></p>
  */
 
+@SuppressWarnings("restriction")
 public class UnsafeAdapter {
 	
 	/** The system prop specifying the use of the safe memory management implementation */
@@ -113,6 +114,9 @@ public class UnsafeAdapter {
     	return UnsafeAdapter.ADDRESS_SIZE==4 ? theUNSAFE.getInt(array, UnsafeAdapter.OBJECTS_OFFSET) : theUNSAFE.getLong(array, UnsafeAdapter.OBJECTS_OFFSET);
     }	
 	
+	// =======================================================================================================================
+	//	Sizing Operations Operations
+	// =======================================================================================================================
 	
 	/**
 	 * Report the offset of the first element in the storage allocation of a
@@ -152,6 +156,59 @@ public class UnsafeAdapter {
 		return theUNSAFE.addressSize();
 	}
 	
+	// =======================================================================================================
+	// Utility operations
+	// =======================================================================================================
+	
+	/**
+	 * Gets the load average in the system run queue assigned
+	 * to the available processors averaged over various periods of time.
+	 * This method retrieves the given nelem samples and
+	 * assigns to the elements of the given loadavg array.
+	 * The system imposes a maximum of 3 samples, representing
+	 * averages over the last 1,  5,  and  15 minutes, respectively.
+	 * @param results The array to put the results into
+	 * @param samples The number of samples to take. Max is 3. Min is 1. 
+	 * @return The number of samples taken
+	 * @see sun.misc.Unsafe#getLoadAverage(double[], int)
+	 */
+	public static int getLoadAverage(double[] results, int samples) {
+		return theUNSAFE.getLoadAverage(results, samples);
+	}
+	
+	/**
+	 * Returns the most recent 1 minute system load average
+	 * @return the most recent 1 minute system load average
+	 * @see sun.misc.Unsafe#getLoadAverage(double[], int)
+	 */
+	public static double getLoad() {
+		double[] loadavg = new double[1];
+		if (theUNSAFE.getLoadAverage(loadavg, 1) == 1) {
+			return loadavg[0];
+		}
+		return -1.0;		
+	}
+	
+	/** The array to return if {@link #getLoadAverage()} fails */
+	private static final double[] FAILED_LOAD_AVG = new double[]{-1d, -1d, -1d};
+	
+	/**
+	 * Returns the System load averages for the last 1,  5,  and  15 minutes, respectively.
+	 * @return the System load averages 
+	 * @see sun.misc.Unsafe#getLoadAverage(double[], int)
+	 */
+	public static double[] getLoadAverage() {
+		double[] loadavg = new double[3];
+		if(theUNSAFE.getLoadAverage(loadavg, 3)==3) {
+			return loadavg;
+		}
+		return FAILED_LOAD_AVG.clone();
+	}
+	
+	
+	// =======================================================================================================================
+	//	Unsafe Class Operations
+	// =======================================================================================================================
 
 	/**
 	 * Allocate an instance but do not run an constructor. 
@@ -161,48 +218,8 @@ public class UnsafeAdapter {
 	 * @throws InstantiationException thrown on a failure to instantiate
 	 * @see sun.misc.Unsafe#allocateInstance(java.lang.Class)
 	 */
-	public Object allocateInstance(Class<?> clazz) throws InstantiationException {
+	public static Object allocateInstance(Class<?> clazz) throws InstantiationException {
 		return theUNSAFE.allocateInstance(clazz);
-	}
-	
-
-	/**
-	 * Atomically update Java variable to x if it is currently holding expected.
-	 * @param object The target object. If null, the offset is assumed to be an absolute address
-	 * @param offset  The offset of the base address of the object, or an absolute address if the object is null
-	 * @param expected  The expected current value
-	 * @param x the value to set if the expected evaluation was correct
-	 * @return true if the expected evaluation was correct and the value was set, false otherwise
-	 * @see sun.misc.Unsafe#compareAndSwapInt(java.lang.Object, long, int, int)
-	 */
-	public final boolean compareAndSwapInt(Object object, long offset, int expected, int x) {
-		return theUNSAFE.compareAndSwapInt(object, offset, expected, x);
-	}
-
-	/**
-	 * Atomically update Java variable to x if it is currently holding expected.
-	 * @param object The target object. If null, the offset is assumed to be an absolute address
-	 * @param offset  The offset of the base address of the object, or an absolute address if the object is null
-	 * @param expected  The expected current value
-	 * @param x the value to set if the expected evaluation was correct
-	 * @return true if the expected evaluation was correct and the value was set, false otherwise
-	 * @see sun.misc.Unsafe#compareAndSwapLong(java.lang.Object, long, long, long)
-	 */
-	public final boolean compareAndSwapLong(Object object, long offset, long expected, long x) {
-		return theUNSAFE.compareAndSwapLong(object, offset, expected, x);
-	}
-
-	/**
-	 * Atomically update Java variable to x if it is currently holding expected.
-	 * @param object The target object. If null, the offset is assumed to be an absolute address
-	 * @param offset  The offset of the base address of the object, or an absolute address if the object is null
-	 * @param expected  The expected current value
-	 * @param x the value to set if the expected evaluation was correct
-	 * @return true if the expected evaluation was correct and the value was set, false otherwise
-	 * @see sun.misc.Unsafe#compareAndSwapObject(java.lang.Object, long, java.lang.Object, java.lang.Object)
-	 */
-	public final boolean compareAndSwapObject(Object object, long offset, long expected, long x) {
-		return theUNSAFE.compareAndSwapObject(object, offset, expected, x);
 	}
 	
 	/**
@@ -221,7 +238,7 @@ public class UnsafeAdapter {
 	 * @return the defined class
 	 * @see sun.misc.Unsafe#defineAnonymousClass(java.lang.Class, byte[], java.lang.Object[])
 	 */
-	public Class<?> defineAnonymousClass(Class<?> hostClass, byte[] byteCode, Object[] cpPatches) {
+	public static Class<?> defineAnonymousClass(Class<?> hostClass, byte[] byteCode, Object[] cpPatches) {
 		return theUNSAFE.defineAnonymousClass(hostClass, byteCode, cpPatches);
 	}
 
@@ -237,7 +254,7 @@ public class UnsafeAdapter {
 	 * @return the created class
 	 * @see sun.misc.Unsafe#defineClass(java.lang.String, byte[], int, int, java.lang.ClassLoader, java.security.ProtectionDomain)
 	 */
-	public Class<?> defineClass(String name, byte[] byteCode, int offset, int length, ClassLoader loader, ProtectionDomain protectionDomain) {
+	public static Class<?> defineClass(String name, byte[] byteCode, int offset, int length, ClassLoader loader, ProtectionDomain protectionDomain) {
 		return theUNSAFE.defineClass(name, byteCode, offset, length, loader, protectionDomain);
 	}
 
@@ -252,7 +269,7 @@ public class UnsafeAdapter {
 	 * @deprecated Use the method {@link #defineClass(String, byte[], int, int, ClassLoader, ProtectionDomain)}
 	 * @see sun.misc.Unsafe#defineClass(java.lang.String, byte[], int, int)
 	 */
-	public Class<?> defineClass(String name, byte[] byteCode, int offset, int length) {
+	public static Class<?> defineClass(String name, byte[] byteCode, int offset, int length) {
 		return theUNSAFE.defineClass(name, byteCode, offset, length);
 	}
 
@@ -262,9 +279,58 @@ public class UnsafeAdapter {
 	 * @param clazz The class to ensure the initialization of
 	 * @see sun.misc.Unsafe#ensureClassInitialized(java.lang.Class)
 	 */
-	public void ensureClassInitialized(Class<?> clazz) {
+	public static void ensureClassInitialized(Class<?> clazz) {
 		theUNSAFE.ensureClassInitialized(clazz);
 	}
+	
+	
+	// =======================================================================================================================
+	//	Compare and Swap Operations
+	// =======================================================================================================================
+	
+	/**
+	 * Atomically update Java variable to x if it is currently holding expected.
+	 * @param object The target object. If null, the offset is assumed to be an absolute address
+	 * @param offset  The offset of the base address of the object, or an absolute address if the object is null
+	 * @param expected  The expected current value
+	 * @param x the value to set if the expected evaluation was correct
+	 * @return true if the expected evaluation was correct and the value was set, false otherwise
+	 * @see sun.misc.Unsafe#compareAndSwapInt(java.lang.Object, long, int, int)
+	 */
+	public static final boolean compareAndSwapInt(Object object, long offset, int expected, int x) {
+		return theUNSAFE.compareAndSwapInt(object, offset, expected, x);
+	}
+
+	/**
+	 * Atomically update Java variable to x if it is currently holding expected.
+	 * @param object The target object. If null, the offset is assumed to be an absolute address
+	 * @param offset  The offset of the base address of the object, or an absolute address if the object is null
+	 * @param expected  The expected current value
+	 * @param x the value to set if the expected evaluation was correct
+	 * @return true if the expected evaluation was correct and the value was set, false otherwise
+	 * @see sun.misc.Unsafe#compareAndSwapLong(java.lang.Object, long, long, long)
+	 */
+	public static final boolean compareAndSwapLong(Object object, long offset, long expected, long x) {
+		return theUNSAFE.compareAndSwapLong(object, offset, expected, x);
+	}
+
+	/**
+	 * Atomically update Java variable to x if it is currently holding expected.
+	 * @param object The target object. If null, the offset is assumed to be an absolute address
+	 * @param offset  The offset of the base address of the object, or an absolute address if the object is null
+	 * @param expected  The expected current value
+	 * @param x the value to set if the expected evaluation was correct
+	 * @return true if the expected evaluation was correct and the value was set, false otherwise
+	 * @see sun.misc.Unsafe#compareAndSwapObject(java.lang.Object, long, java.lang.Object, java.lang.Object)
+	 */
+	public static final boolean compareAndSwapObject(Object object, long offset, long expected, long x) {
+		return theUNSAFE.compareAndSwapObject(object, offset, expected, x);
+	}
+	
+	// =======================================================================================================================
+	//	Class Member Offset Operations
+	// =======================================================================================================================
+	
 
 
 	/**
@@ -282,7 +348,7 @@ public class UnsafeAdapter {
 	 * @deprecated As - of 1.4.1, use {@link #staticFieldOffset(Field)} for static fields and {@link #objectFieldOffset(Field)} for non-static fields.
 	 * @see sun.misc.Unsafe#fieldOffset(java.lang.reflect.Field)
 	 */
-	public int fieldOffset(Field field) {
+	public static int fieldOffset(Field field) {
 		return theUNSAFE.fieldOffset(field);
 	}
 	
@@ -306,7 +372,7 @@ public class UnsafeAdapter {
 	 * @return the offset of the field
 	 * @see sun.misc.Unsafe#staticFieldOffset(java.lang.reflect.Field)
 	 */
-	public long staticFieldOffset(Field field) {
+	public static long staticFieldOffset(Field field) {
 		return theUNSAFE.staticFieldOffset(field);
 	}
 	
@@ -328,7 +394,7 @@ public class UnsafeAdapter {
 	 * @return the offset of the field
 	 * @see sun.misc.Unsafe#objectFieldOffset(java.lang.reflect.Field)
 	 */
-	public long objectFieldOffset(Field field) {
+	public static long objectFieldOffset(Field field) {
 		return theUNSAFE.objectFieldOffset(field);
 	}
 	
@@ -416,7 +482,7 @@ public class UnsafeAdapter {
 	 * @param bytes The bytes to copy
 	 * @see sun.misc.Unsafe#copyMemory(long, long, long)
 	 */
-	public void copyMemory(long srcOffset, long destOffset, long bytes) {
+	public static void copyMemory(long srcOffset, long destOffset, long bytes) {
 		adapter.copyMemory(srcOffset, destOffset, bytes);
 	}
 	
@@ -440,7 +506,7 @@ public class UnsafeAdapter {
 	 * @param bytes The bytes to copy
 	 * @see sun.misc.Unsafe#copyMemory(java.lang.Object, long, java.lang.Object, long, long)
 	 */
-	public void copyMemory(Object srcBase, long srcOffset, Object destBase, long destOffset, long bytes) {
+	public static void copyMemory(Object srcBase, long srcOffset, Object destBase, long destOffset, long bytes) {
 		adapter.copyMemory(srcBase, srcOffset, destBase, destOffset, bytes);
 	}
 	
@@ -458,7 +524,7 @@ public class UnsafeAdapter {
 	 * @deprecated As - of 1.4.1, cast the 32-bit offset argument to a long. See {@link #staticFieldOffset}.
 	 * @see sun.misc.Unsafe#getByte(java.lang.Object, int)
 	 */
-	public byte getByte(Object object, int offset) {		
+	public static byte getByte(Object object, int offset) {		
 		return object!=null ? theUNSAFE.getByte(object, offset) : adapter.getByte(offset);
 	}
 
@@ -471,7 +537,7 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getByte(java.lang.Object, long)
 	 */
-	public byte getByte(Object object, long offset) {
+	public static byte getByte(Object object, long offset) {
 		return object!=null ? theUNSAFE.getByte(object, offset) : adapter.getByte(offset);
 	}
 	
@@ -481,7 +547,7 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getByte(java.lang.Object, long)
 	 */
-	public byte getByte(long address) {
+	public static byte getByte(long address) {
 		return adapter.getByte(address);
 	}
 		
@@ -493,7 +559,7 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getByteVolatile(java.lang.Object, long)
 	 */
-	public byte getByteVolatile(Object object, long offset) {
+	public static byte getByteVolatile(Object object, long offset) {
 		return object!=null ? theUNSAFE.getByteVolatile(object, offset) : adapter.getByteVolatile(offset);
 	}
 	
@@ -503,9 +569,75 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getByteVolatile(java.lang.Object, long)
 	 */
-	public byte getByteVolatile(long address) {
+	public static byte getByteVolatile(long address) {
 		return adapter.getByteVolatile(address);
 	}
+	
+	//===========================================================================================================
+	//	Byte Write Ops
+	//===========================================================================================================	
+	
+	/**
+	 * Stores a value into a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from #allocateMemory , the
+	 * results are undefined.
+	 * @param address the address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putByte(long, byte)
+	 */
+	public void putByte(long address, byte value) {
+		adapter.putByte(address, value);
+	}
+
+	/**
+	 * Stores a value into a given offset off the base address of the passed object.
+	 * If the object is null, then the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @deprecated As - of 1.4.1, cast the 32-bit offset argument to a long. See #staticFieldOffset .
+	 * @see sun.misc.Unsafe#putByte(java.lang.Object, int, byte)
+	 */
+	public void putByte(Object object, int offset, byte value) {
+		theUNSAFE.putByte(object, offset, value);
+	}
+
+	/**
+	 * Stores a value into a given offset off the base address of the passed object.
+	 * If the object is null, then the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putByte(java.lang.Object, long, byte)
+	 */
+	public void putByte(Object object, long offset, byte value) {
+		theUNSAFE.putByte(object, offset, value);
+	}
+
+	/**
+	 * Volatile version of {@link #putByte(Object, long, byte)}
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putByteVolatile(java.lang.Object, long, byte)
+	 */
+	public void putByteVolatile(Object object, long offset, byte value) {
+		theUNSAFE.putByteVolatile(object, offset, value);
+	}
+	
+	/**
+	 * Volatile version of {@link #putByte(long, byte)}
+	 * @param address The address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putByteVolatile(java.lang.Object, long, byte)
+	 */
+	public void putByteVolatile(long address, byte value) {
+		adapter.putByteVolatile(address, value);
+	}
+	
 	
 	
 	//===========================================================================================================
@@ -522,7 +654,7 @@ public class UnsafeAdapter {
 	 * @deprecated As - of 1.4.1, cast the 32-bit offset argument to a long. See {@link #staticFieldOffset}.
 	 * @see sun.misc.Unsafe#getBoolean(java.lang.Object, int)
 	 */
-	public boolean getBoolean(Object object, int offset) {		
+	public static boolean getBoolean(Object object, int offset) {		
 		return object!=null ? theUNSAFE.getBoolean(object, offset) : adapter.getBoolean(offset);
 	}
 
@@ -535,7 +667,7 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getBoolean(java.lang.Object, long)
 	 */
-	public boolean getBoolean(Object object, long offset) {
+	public static boolean getBoolean(Object object, long offset) {
 		return object!=null ? theUNSAFE.getBoolean(object, offset) : adapter.getBoolean(offset);
 	}
 	
@@ -545,7 +677,7 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getBoolean(java.lang.Object, long)
 	 */
-	public boolean getBoolean(long address) {
+	public static boolean getBoolean(long address) {
 		return adapter.getBoolean(address);
 	}
 		
@@ -557,7 +689,7 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getBooleanVolatile(java.lang.Object, long)
 	 */
-	public boolean getBooleanVolatile(Object object, long offset) {
+	public static boolean getBooleanVolatile(Object object, long offset) {
 		return object!=null ? theUNSAFE.getBooleanVolatile(object, offset) : adapter.getBooleanVolatile(offset);
 	}
 	
@@ -567,9 +699,76 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getBooleanVolatile(java.lang.Object, long)
 	 */
-	public boolean getBooleanVolatile(long address) {
+	public static boolean getBooleanVolatile(long address) {
 		return adapter.getBooleanVolatile(address);
 	}
+	
+	//===========================================================================================================
+	//	Boolean Write Ops
+	//===========================================================================================================	
+	
+	/**
+	 * Stores a value into a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from #allocateMemory , the
+	 * results are undefined.
+	 * @param address the address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putBoolean(Object, long, boolean)
+	 */
+	public void putBoolean(long address, boolean value) {
+		adapter.putBoolean(address, value);
+	}
+
+	/**
+	 * Stores a value into a given offset off the base address of the passed object.
+	 * If the object is null, then the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @deprecated As - of 1.4.1, cast the 32-bit offset argument to a long. See #staticFieldOffset .
+	 * @see sun.misc.Unsafe#putBoolean(java.lang.Object, int, boolean)
+	 */
+	public void putBoolean(Object object, int offset, boolean value) {
+		theUNSAFE.putBoolean(object, offset, value);
+	}
+
+	/**
+	 * Stores a value into a given offset off the base address of the passed object.
+	 * If the object is null, then the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putBoolean(java.lang.Object, long, boolean)
+	 */
+	public void putBoolean(Object object, long offset, boolean value) {
+		theUNSAFE.putBoolean(object, offset, value);
+	}
+
+	/**
+	 * Volatile version of {@link #putBoolean(Object, long, boolean)}
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putBooleanVolatile(java.lang.Object, long, boolean)
+	 */
+	public void putBooleanVolatile(Object object, long offset, boolean value) {
+		theUNSAFE.putBooleanVolatile(object, offset, value);
+	}
+	
+	/**
+	 * Volatile version of {@link #putBoolean(long, boolean)}
+	 * @param address The address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putBooleanVolatile(java.lang.Object, long, boolean)
+	 */
+	public void putBooleanVolatile(long address, boolean value) {
+		adapter.putBooleanVolatile(address, value);
+	}
+	
+	
 	
 	//===========================================================================================================
 	//	Short Read Ops
@@ -582,7 +781,7 @@ public class UnsafeAdapter {
 	 * @param address The address to read the value from
 	 * @return the read value
 	 */
-	public short getShort(long address) {
+	public static short getShort(long address) {
 		return adapter.getShort(address);
 	}
 	
@@ -592,7 +791,7 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getByteVolatile(Object, long)
 	 */
-	public short getShortVolatile(long address) {
+	public static short getShortVolatile(long address) {
 		return adapter.getShortVolatile(address);
 	}
 	
@@ -607,7 +806,7 @@ public class UnsafeAdapter {
 	 * @deprecated As - of 1.4.1, cast the 32-bit offset argument to a long. See #staticFieldOffset .
 	 * @see sun.misc.Unsafe#getShort(java.lang.Object, int)
 	 */
-	public short getShort(Object object, int offset) {
+	public static short getShort(Object object, int offset) {
 		return object!=null ? theUNSAFE.getShort(object, offset) : adapter.getShort(offset);
 	}
 
@@ -620,7 +819,7 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getShort(java.lang.Object, long)
 	 */
-	public short getShort(Object object, long offset) {
+	public static short getShort(Object object, long offset) {
 		return object!=null ? theUNSAFE.getShort(object, offset) : adapter.getShort(offset);
 	}
 
@@ -632,9 +831,76 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getShortVolatile(java.lang.Object, long)
 	 */
-	public short getShortVolatile(Object object, long offset) {
+	public static short getShortVolatile(Object object, long offset) {
 		return object!=null ? theUNSAFE.getShortVolatile(object, offset) : adapter.getShortVolatile(offset);
 	}
+	
+	//===========================================================================================================
+	//	Short Write Ops
+	//===========================================================================================================	
+	
+	/**
+	 * Stores a value into a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from #allocateMemory , the
+	 * results are undefined.
+	 * @param address the address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putShort(long, short)
+	 */
+	public void putShort(long address, short value) {
+		adapter.putShort(address, value);
+	}
+
+	/**
+	 * Stores a value into a given offset off the base address of the passed object.
+	 * If the object is null, then the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @deprecated As - of 1.4.1, cast the 32-bit offset argument to a long. See #staticFieldOffset .
+	 * @see sun.misc.Unsafe#putShort(java.lang.Object, int, short)
+	 */
+	public void putShort(Object object, int offset, short value) {
+		theUNSAFE.putShort(object, offset, value);
+	}
+
+	/**
+	 * Stores a value into a given offset off the base address of the passed object.
+	 * If the object is null, then the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putShort(java.lang.Object, long, short)
+	 */
+	public void putShort(Object object, long offset, short value) {
+		theUNSAFE.putShort(object, offset, value);
+	}
+
+	/**
+	 * Volatile version of {@link #putShort(Object, long, short)}
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putShortVolatile(java.lang.Object, long, short)
+	 */
+	public void putShortVolatile(Object object, long offset, short value) {
+		theUNSAFE.putShortVolatile(object, offset, value);
+	}
+	
+	/**
+	 * Volatile version of {@link #putShort(long, short)}
+	 * @param address The address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putShortVolatile(java.lang.Object, long, short)
+	 */
+	public void putShortVolatile(long address, short value) {
+		adapter.putShortVolatile(address, value);
+	}
+	
+	
 	
 	//===========================================================================================================
 	//	Char Read Ops
@@ -650,7 +916,7 @@ public class UnsafeAdapter {
 	 * @deprecated As - of 1.4.1, cast the 32-bit offset argument to a long. See {@link #staticFieldOffset}.
 	 * @see sun.misc.Unsafe#getChar(java.lang.Object, int)
 	 */
-	public char getChar(Object object, int offset) {		
+	public static char getChar(Object object, int offset) {		
 		return object!=null ? theUNSAFE.getChar(object, offset) : adapter.getChar(offset);
 	}
 
@@ -663,7 +929,7 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getChar(java.lang.Object, long)
 	 */
-	public char getChar(Object object, long offset) {
+	public static char getChar(Object object, long offset) {
 		return object!=null ? theUNSAFE.getChar(object, offset) : adapter.getChar(offset);
 	}
 	
@@ -673,7 +939,7 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getChar(java.lang.Object, long)
 	 */
-	public char getChar(long address) {
+	public static char getChar(long address) {
 		return adapter.getChar(address);
 	}
 		
@@ -685,7 +951,7 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getCharVolatile(java.lang.Object, long)
 	 */
-	public char getCharVolatile(Object object, long offset) {
+	public static char getCharVolatile(Object object, long offset) {
 		return object!=null ? theUNSAFE.getCharVolatile(object, offset) : adapter.getCharVolatile(offset);
 	}
 	
@@ -695,9 +961,76 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getCharVolatile(java.lang.Object, long)
 	 */
-	public char getCharVolatile(long address) {
+	public static char getCharVolatile(long address) {
 		return adapter.getCharVolatile(address);
 	}
+	
+	//===========================================================================================================
+	//	Char Write Ops
+	//===========================================================================================================	
+	
+	/**
+	 * Stores a value into a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from #allocateMemory , the
+	 * results are undefined.
+	 * @param address the address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putChar(long, char)
+	 */
+	public void putChar(long address, char value) {
+		adapter.putChar(address, value);
+	}
+
+	/**
+	 * Stores a value into a given offset off the base address of the passed object.
+	 * If the object is null, then the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @deprecated As - of 1.4.1, cast the 32-bit offset argument to a long. See #staticFieldOffset .
+	 * @see sun.misc.Unsafe#putChar(java.lang.Object, int, char)
+	 */
+	public void putChar(Object object, int offset, char value) {
+		theUNSAFE.putChar(object, offset, value);
+	}
+
+	/**
+	 * Stores a value into a given offset off the base address of the passed object.
+	 * If the object is null, then the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putChar(java.lang.Object, long, char)
+	 */
+	public void putChar(Object object, long offset, char value) {
+		theUNSAFE.putChar(object, offset, value);
+	}
+
+	/**
+	 * Volatile version of {@link #putChar(Object, long, char)}
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putCharVolatile(java.lang.Object, long, char)
+	 */
+	public void putCharVolatile(Object object, long offset, char value) {
+		theUNSAFE.putCharVolatile(object, offset, value);
+	}
+	
+	/**
+	 * Volatile version of {@link #putChar(long, char)}
+	 * @param address The address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putCharVolatile(java.lang.Object, long, char)
+	 */
+	public void putCharVolatile(long address, char value) {
+		adapter.putCharVolatile(address, value);
+	}
+	
+	
 	
 	//===========================================================================================================
 	//	Int Read Ops
@@ -713,7 +1046,7 @@ public class UnsafeAdapter {
 	 * @deprecated As - of 1.4.1, cast the 32-bit offset argument to a long. See {@link #staticFieldOffset}.
 	 * @see sun.misc.Unsafe#getInt(java.lang.Object, int)
 	 */
-	public int getInt(Object object, int offset) {		
+	public static int getInt(Object object, int offset) {		
 		return object!=null ? theUNSAFE.getInt(object, offset) : adapter.getInt(offset);
 	}
 
@@ -726,7 +1059,7 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getInt(java.lang.Object, long)
 	 */
-	public int getInt(Object object, long offset) {
+	public static int getInt(Object object, long offset) {
 		return object!=null ? theUNSAFE.getInt(object, offset) : adapter.getInt(offset);
 	}
 	
@@ -736,7 +1069,7 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getInt(java.lang.Object, long)
 	 */
-	public int getInt(long address) {
+	public static int getInt(long address) {
 		return adapter.getInt(address);
 	}
 		
@@ -748,7 +1081,7 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getIntVolatile(java.lang.Object, long)
 	 */
-	public int getIntVolatile(Object object, long offset) {
+	public static int getIntVolatile(Object object, long offset) {
 		return object!=null ? theUNSAFE.getIntVolatile(object, offset) : adapter.getIntVolatile(offset);
 	}
 	
@@ -758,9 +1091,76 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getIntVolatile(java.lang.Object, long)
 	 */
-	public int getIntVolatile(long address) {
+	public static int getIntVolatile(long address) {
 		return adapter.getIntVolatile(address);
 	}
+	
+	//===========================================================================================================
+	//	Int Write Ops
+	//===========================================================================================================	
+	
+	/**
+	 * Stores a value into a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from #allocateMemory , the
+	 * results are undefined.
+	 * @param address the address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putInt(long, int)
+	 */
+	public void putInt(long address, int value) {
+		adapter.putInt(address, value);
+	}
+
+	/**
+	 * Stores a value into a given offset off the base address of the passed object.
+	 * If the object is null, then the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @deprecated As - of 1.4.1, cast the 32-bit offset argument to a long. See #staticFieldOffset .
+	 * @see sun.misc.Unsafe#putInt(java.lang.Object, int, int)
+	 */
+	public void putInt(Object object, int offset, int value) {
+		theUNSAFE.putInt(object, offset, value);
+	}
+
+	/**
+	 * Stores a value into a given offset off the base address of the passed object.
+	 * If the object is null, then the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putInt(java.lang.Object, long, int)
+	 */
+	public void putInt(Object object, long offset, int value) {
+		theUNSAFE.putInt(object, offset, value);
+	}
+
+	/**
+	 * Volatile version of {@link #putInt(Object, long, int)}
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putIntVolatile(java.lang.Object, long, int)
+	 */
+	public void putIntVolatile(Object object, long offset, int value) {
+		theUNSAFE.putIntVolatile(object, offset, value);
+	}
+	
+	/**
+	 * Volatile version of {@link #putInt(long, int)}
+	 * @param address The address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putIntVolatile(java.lang.Object, long, int)
+	 */
+	public void putIntVolatile(long address, int value) {
+		adapter.putIntVolatile(address, value);
+	}
+	
+	
 	
 	//===========================================================================================================
 	//	Float Read Ops
@@ -776,7 +1176,7 @@ public class UnsafeAdapter {
 	 * @deprecated As - of 1.4.1, cast the 32-bit offset argument to a long. See {@link #staticFieldOffset}.
 	 * @see sun.misc.Unsafe#getFloat(java.lang.Object, int)
 	 */
-	public float getFloat(Object object, int offset) {		
+	public static float getFloat(Object object, int offset) {		
 		return object!=null ? theUNSAFE.getFloat(object, offset) : adapter.getFloat(offset);
 	}
 
@@ -789,7 +1189,7 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getFloat(java.lang.Object, long)
 	 */
-	public float getFloat(Object object, long offset) {
+	public static float getFloat(Object object, long offset) {
 		return object!=null ? theUNSAFE.getFloat(object, offset) : adapter.getFloat(offset);
 	}
 	
@@ -799,7 +1199,7 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getFloat(java.lang.Object, long)
 	 */
-	public float getFloat(long address) {
+	public static float getFloat(long address) {
 		return adapter.getFloat(address);
 	}
 		
@@ -811,7 +1211,7 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getFloatVolatile(java.lang.Object, long)
 	 */
-	public float getFloatVolatile(Object object, long offset) {
+	public static float getFloatVolatile(Object object, long offset) {
 		return object!=null ? theUNSAFE.getFloatVolatile(object, offset) : adapter.getFloatVolatile(offset);
 	}
 	
@@ -821,9 +1221,76 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getFloatVolatile(java.lang.Object, long)
 	 */
-	public float getFloatVolatile(long address) {
+	public static float getFloatVolatile(long address) {
 		return adapter.getFloatVolatile(address);
 	}
+	
+	//===========================================================================================================
+	//	Float Write Ops
+	//===========================================================================================================	
+	
+	/**
+	 * Stores a value into a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from #allocateMemory , the
+	 * results are undefined.
+	 * @param address the address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putFloat(long, float)
+	 */
+	public void putFloat(long address, float value) {
+		adapter.putFloat(address, value);
+	}
+
+	/**
+	 * Stores a value into a given offset off the base address of the passed object.
+	 * If the object is null, then the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @deprecated As - of 1.4.1, cast the 32-bit offset argument to a long. See #staticFieldOffset .
+	 * @see sun.misc.Unsafe#putFloat(java.lang.Object, int, float)
+	 */
+	public void putFloat(Object object, int offset, float value) {
+		theUNSAFE.putFloat(object, offset, value);
+	}
+
+	/**
+	 * Stores a value into a given offset off the base address of the passed object.
+	 * If the object is null, then the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putFloat(java.lang.Object, long, float)
+	 */
+	public void putFloat(Object object, long offset, float value) {
+		theUNSAFE.putFloat(object, offset, value);
+	}
+
+	/**
+	 * Volatile version of {@link #putFloat(Object, long, float)}
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putFloatVolatile(java.lang.Object, long, float)
+	 */
+	public void putFloatVolatile(Object object, long offset, float value) {
+		theUNSAFE.putFloatVolatile(object, offset, value);
+	}
+	
+	/**
+	 * Volatile version of {@link #putFloat(long, float)}
+	 * @param address The address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putFloatVolatile(java.lang.Object, long, float)
+	 */
+	public void putFloatVolatile(long address, float value) {
+		adapter.putFloatVolatile(address, value);
+	}
+	
+		
 	
 	//===========================================================================================================
 	//	Long Read Ops
@@ -839,7 +1306,7 @@ public class UnsafeAdapter {
 	 * @deprecated As - of 1.4.1, cast the 32-bit offset argument to a long. See {@link #staticFieldOffset}.
 	 * @see sun.misc.Unsafe#getLong(java.lang.Object, int)
 	 */
-	public long getLong(Object object, int offset) {		
+	public static long getLong(Object object, int offset) {		
 		return object!=null ? theUNSAFE.getLong(object, offset) : adapter.getLong(offset);
 	}
 
@@ -852,7 +1319,7 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getLong(java.lang.Object, long)
 	 */
-	public long getLong(Object object, long offset) {
+	public static long getLong(Object object, long offset) {
 		return object!=null ? theUNSAFE.getLong(object, offset) : adapter.getLong(offset);
 	}
 	
@@ -862,7 +1329,7 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getLong(java.lang.Object, long)
 	 */
-	public long getLong(long address) {
+	public static long getLong(long address) {
 		return adapter.getLong(address);
 	}
 		
@@ -874,7 +1341,7 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getLongVolatile(java.lang.Object, long)
 	 */
-	public long getLongVolatile(Object object, long offset) {
+	public static long getLongVolatile(Object object, long offset) {
 		return object!=null ? theUNSAFE.getLongVolatile(object, offset) : adapter.getLongVolatile(offset);
 	}
 	
@@ -884,13 +1351,341 @@ public class UnsafeAdapter {
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getLongVolatile(java.lang.Object, long)
 	 */
-	public long getLongVolatile(long address) {
+	public static long getLongVolatile(long address) {
 		return adapter.getLongVolatile(address);
 	}
+	
+	//===========================================================================================================
+	//	Long Write Ops
+	//===========================================================================================================	
+	
+	/**
+	 * Stores a value into a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from #allocateMemory , the
+	 * results are undefined.
+	 * @param address the address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putLong(long, long)
+	 */
+	public void putLong(long address, long value) {
+		adapter.putLong(address, value);
+	}
 
+	/**
+	 * Stores a value into a given offset off the base address of the passed object.
+	 * If the object is null, then the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @deprecated As - of 1.4.1, cast the 32-bit offset argument to a long. See #staticFieldOffset .
+	 * @see sun.misc.Unsafe#putLong(java.lang.Object, int, long)
+	 */
+	public void putLong(Object object, int offset, long value) {
+		theUNSAFE.putLong(object, offset, value);
+	}
+
+	/**
+	 * Stores a value into a given offset off the base address of the passed object.
+	 * If the object is null, then the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putLong(java.lang.Object, long, long)
+	 */
+	public void putLong(Object object, long offset, long value) {
+		theUNSAFE.putLong(object, offset, value);
+	}
+
+	/**
+	 * Volatile version of {@link #putLong(Object, long, long)}
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putLongVolatile(java.lang.Object, long, long)
+	 */
+	public void putLongVolatile(Object object, long offset, long value) {
+		theUNSAFE.putLongVolatile(object, offset, value);
+	}
+	
+	/**
+	 * Volatile version of {@link #putLong(long, long)}
+	 * @param address The address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putLongVolatile(java.lang.Object, long, long)
+	 */
+	public void putLongVolatile(long address, long value) {
+		adapter.putLongVolatile(address, value);
+	}
+	
+		
+
+	//===========================================================================================================
+	//	Double Read Ops
+	//===========================================================================================================	
+	
+	/**
+	 * Reads and returns a double from the specified offset off the base address of the passed object.
+	 * If the object is null, the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based on
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to read from if the target object is null
+	 * @return the read value
+	 * @deprecated As - of 1.4.1, cast the 32-bit offset argument to a long. See {@link #staticFieldOffset}.
+	 * @see sun.misc.Unsafe#getDouble(java.lang.Object, int)
+	 */
+	public static double getDouble(Object object, int offset) {		
+		return object!=null ? theUNSAFE.getDouble(object, offset) : adapter.getDouble(offset);
+	}
+
+	/**
+	 * Reads and returns a double from the specified offset off the base address of the passed object.
+	 * If the object is null, the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based on
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to read from if the target object is null
+	 * @return the read value
+	 * @see sun.misc.Unsafe#getDouble(java.lang.Object, long)
+	 */
+	public static double getDouble(Object object, long offset) {
+		return object!=null ? theUNSAFE.getDouble(object, offset) : adapter.getDouble(offset);
+	}
+	
+	/**
+	 * Reads and returns a double from the specified address 
+	 * @param address The address to read the value from
+	 * @return the read value
+	 * @see sun.misc.Unsafe#getDouble(java.lang.Object, long)
+	 */
+	public static double getDouble(long address) {
+		return adapter.getDouble(address);
+	}
+		
+	/**
+	 * Volatile version of {@link UnsafeAdapter#getDouble(Object, long)}
+	 * @param object The target object, the base address of which the offset is based on
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to read from if the target object is null
+	 * @return the read value
+	 * @see sun.misc.Unsafe#getDoubleVolatile(java.lang.Object, long)
+	 */
+	public static double getDoubleVolatile(Object object, long offset) {
+		return object!=null ? theUNSAFE.getDoubleVolatile(object, offset) : adapter.getDoubleVolatile(offset);
+	}
+	
+	/**
+	 * Volatile version of {@link UnsafeAdapter#getDouble(Object, long)}
+	 * @param address The address to read the value from
+	 * @return the read value
+	 * @see sun.misc.Unsafe#getDoubleVolatile(java.lang.Object, long)
+	 */
+	public static double getDoubleVolatile(long address) {
+		return adapter.getDoubleVolatile(address);
+	}
+	
+	//===========================================================================================================
+	//	Double Write Ops
+	//===========================================================================================================	
+	
+	/**
+	 * Stores a value into a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from #allocateMemory , the
+	 * results are undefined.
+	 * @param address the address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putDouble(long, double)
+	 */
+	public void putDouble(long address, double value) {
+		adapter.putDouble(address, value);
+	}
+
+	/**
+	 * Stores a value into a given offset off the base address of the passed object.
+	 * If the object is null, then the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @deprecated As - of 1.4.1, cast the 32-bit offset argument to a long. See #staticFieldOffset .
+	 * @see sun.misc.Unsafe#putDouble(java.lang.Object, int, double)
+	 */
+	public void putDouble(Object object, int offset, double value) {
+		theUNSAFE.putDouble(object, offset, value);
+	}
+
+	/**
+	 * Stores a value into a given offset off the base address of the passed object.
+	 * If the object is null, then the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putDouble(java.lang.Object, long, double)
+	 */
+	public void putDouble(Object object, long offset, double value) {
+		theUNSAFE.putDouble(object, offset, value);
+	}
+
+	/**
+	 * Volatile version of {@link #putDouble(Object, long, double)}
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putDoubleVolatile(java.lang.Object, long, double)
+	 */
+	public void putDoubleVolatile(Object object, long offset, double value) {
+		theUNSAFE.putDoubleVolatile(object, offset, value);
+	}
+	
+	/**
+	 * Volatile version of {@link #putDouble(long, double)}
+	 * @param address The address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putDoubleVolatile(java.lang.Object, long, double)
+	 */
+	public void putDoubleVolatile(long address, double value) {
+		adapter.putDoubleVolatile(address, value);
+	}
+	
+		
+	
+	//===========================================================================================================
+	//	Object Read Ops
+	//===========================================================================================================	
+	
+	/**
+	 * Reads and returns a object from the specified offset off the base address of the passed object.
+	 * If the object is null, the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based on
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to read from if the target object is null
+	 * @return the read value
+	 * @deprecated As - of 1.4.1, cast the 32-bit offset argument to a long. See {@link #staticFieldOffset}.
+	 * @see sun.misc.Unsafe#getObject(java.lang.Object, int)
+	 */
+	public static Object getObject(Object object, int offset) {		
+		return object!=null ? theUNSAFE.getObject(object, offset) : adapter.getObject(offset);
+	}
+
+	/**
+	 * Reads and returns a object from the specified offset off the base address of the passed object.
+	 * If the object is null, the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based on
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to read from if the target object is null
+	 * @return the read value
+	 * @see sun.misc.Unsafe#getObject(java.lang.Object, long)
+	 */
+	public static Object getObject(Object object, long offset) {
+		return object!=null ? theUNSAFE.getObject(object, offset) : adapter.getObject(offset);
+	}
+	
+	/**
+	 * Reads and returns a object from the specified address 
+	 * @param address The address to read the value from
+	 * @return the read value
+	 * @see sun.misc.Unsafe#getObject(java.lang.Object, long)
+	 */
+	public static Object getObject(long address) {
+		return adapter.getObject(address);
+	}
+		
+	/**
+	 * Volatile version of {@link UnsafeAdapter#getObject(Object, long)}
+	 * @param object The target object, the base address of which the offset is based on
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to read from if the target object is null
+	 * @return the read value
+	 * @see sun.misc.Unsafe#getObjectVolatile(java.lang.Object, long)
+	 */
+	public static Object getObjectVolatile(Object object, long offset) {
+		return object!=null ? theUNSAFE.getObjectVolatile(object, offset) : adapter.getObjectVolatile(offset);
+	}
+	
+	/**
+	 * Volatile version of {@link UnsafeAdapter#getObject(Object, long)}
+	 * @param address The address to read the value from
+	 * @return the read value
+	 * @see sun.misc.Unsafe#getObjectVolatile(java.lang.Object, long)
+	 */
+	public static Object getObjectVolatile(long address) {
+		return adapter.getObjectVolatile(address);
+	}
+	
+	//===========================================================================================================
+	//	Object Write Ops
+	//===========================================================================================================	
+	
+	/**
+	 * Stores a value into a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from #allocateMemory , the
+	 * results are undefined.
+	 * @param address the address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putObject(Object, long, Object)
+	 */
+	public void putObject(long address, Object value) {
+		adapter.putObject(address, value);
+	}
+
+	/**
+	 * Stores a value into a given offset off the base address of the passed object.
+	 * If the object is null, then the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @deprecated As - of 1.4.1, cast the 32-bit offset argument to a long. See #staticFieldOffset .
+	 * @see sun.misc.Unsafe#putObject(java.lang.Object, int, Object)
+	 */
+	public void putObject(Object object, int offset, Object value) {
+		theUNSAFE.putObject(object, offset, value);
+	}
+
+	/**
+	 * Stores a value into a given offset off the base address of the passed object.
+	 * If the object is null, then the offset is assumed to be an absolute address.
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putObject(java.lang.Object, long, Object)
+	 */
+	public void putObject(Object object, long offset, Object value) {
+		theUNSAFE.putObject(object, offset, value);
+	}
+
+	/**
+	 * Volatile version of {@link #putObject(Object, long, Object)}
+	 * @param object The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putObjectVolatile(java.lang.Object, long, Object)
+	 */
+	public void putObjectVolatile(Object object, long offset, Object value) {
+		theUNSAFE.putObjectVolatile(object, offset, value);
+	}
+	
+	/**
+	 * Volatile version of {@link #putObject(long, Object)}
+	 * @param address The address to write to
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putObjectVolatile(java.lang.Object, long, Object)
+	 */
+	public void putObjectVolatile(long address, Object value) {
+		adapter.putObjectVolatile(address, value);
+	}
+	
+		
+	
 	
 	// =======================================================================================================
 	
+
 	
 	/**
 	 * Prints information about the currently configured adapter.
