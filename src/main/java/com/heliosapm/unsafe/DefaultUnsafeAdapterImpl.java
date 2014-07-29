@@ -46,7 +46,7 @@ import sun.misc.Unsafe;
  * <p><code>com.heliosapm.unsafe.DefaultUnsafeAdapterImpl</code></p>
  */
 @SuppressWarnings("restriction")
-class DefaultUnsafeAdapterImpl implements Runnable {
+public class DefaultUnsafeAdapterImpl implements Runnable {
 	// =========================================================
 	//  Singleton
 	// =========================================================
@@ -404,7 +404,7 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 	}
 
 	//===========================================================================================================
-	//	Address Read Ops
+	//	Address Read/Write Ops
 	//===========================================================================================================	
 
 	
@@ -425,6 +425,21 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 		return UNSAFE.getAddress(address);
 	}
 	
+	/**
+	 * Stores a native pointer into a given memory address.  If the address is
+	 * zero, or does not point into a block obtained from #allocateMemory , the results are undefined.
+	 * 
+ 	 * The number of bytes actually written at the target address maybe
+	 * determined by consulting #addressSize . 
+	 * @param targetAddress
+	 * @param address
+	 * @see sun.misc.Unsafe#putAddress(long, long)
+	 */
+	public void putAddress(long targetAddress, long address) {
+		UNSAFE.putAddress(targetAddress, address);
+	}
+
+	
 	//===========================================================================================================
 	//	Byte Read Ops
 	//===========================================================================================================		
@@ -441,7 +456,7 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 	}
 	
 	/**
-	 * Volatile version of {@link #getByte(long)}.
+	 * Volatile version of {@link #getByte(long)}
 	 * @param address The address to read the value from
 	 * @return the read value
 	 * @see sun.misc.Unsafe#getByteVolatile(Object, long)
@@ -687,7 +702,16 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 	public void putIntVolatile(long address, int value) {
 		UNSAFE.putIntVolatile(null, address, value);
 	}
-	
+
+	/**
+	 * Ordered/Lazy version of #putIntVolatile(long, int) 
+	 * @param offset The address to write to 
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putOrderedInt(java.lang.Object, long, int)
+	 */
+	public void putOrderedInt(long offset, int value) {
+		UNSAFE.putOrderedInt(null, offset, value);
+	}
 	
 	//===========================================================================================================
 	//	Float Read Ops
@@ -796,6 +820,17 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 		UNSAFE.putLongVolatile(null, address, value);
 	}
 	
+	/**
+	 * Ordered/Lazy version of #putIntVolatile(long, long) 
+	 * @param offset The address to write to 
+	 * @param value The value to write
+	 * @see sun.misc.Unsafe#putOrderedLong(java.lang.Object, long, long)
+	 */
+	public void putOrderedLong(long offset, long value) {
+		UNSAFE.putOrderedLong(null, offset, value);
+	}
+	
+	
 	//===========================================================================================================
 	//	Double Read Ops
 	//===========================================================================================================
@@ -902,86 +937,31 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 	public void putObjectVolatile(long address, Object value) {
 		UNSAFE.putObjectVolatile(null, address, value);
 	}
+	
+	/**
+	 * Ordered version of {@link #putObject(long, Object)}
+	 * @param address The address to write to
+	 * @param object The object to write
+	 * @see sun.misc.Unsafe#putOrderedObject(java.lang.Object, long, java.lang.Object)
+	 */
+	public void putOrderedObject(long address, Object object) {
+		UNSAFE.putOrderedObject(null, address, object);
+	}
+
 
 
 	//===========================================================================================================
 
 
 
-	/**
-	 * @param arg0
-	 * @see sun.misc.Unsafe#monitorEnter(java.lang.Object)
-	 */
-	public void monitorEnter(Object arg0) {
-		UNSAFE.monitorEnter(arg0);
-	}
-
-	/**
-	 * @param arg0
-	 * @see sun.misc.Unsafe#monitorExit(java.lang.Object)
-	 */
-	public void monitorExit(Object arg0) {
-		UNSAFE.monitorExit(arg0);
-	}
-
-
-	/**
-	 * @return
-	 * @see sun.misc.Unsafe#pageSize()
-	 */
-	public int pageSize() {
-		return UNSAFE.pageSize();
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @see sun.misc.Unsafe#park(boolean, long)
-	 */
-	public void park(boolean arg0, long arg1) {
-		UNSAFE.park(arg0, arg1);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @see sun.misc.Unsafe#putAddress(long, long)
-	 */
-	public void putAddress(long arg0, long arg1) {
-		UNSAFE.putAddress(arg0, arg1);
-	}
 
 
 
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putOrderedInt(java.lang.Object, long, int)
-	 */
-	public void putOrderedInt(Object arg0, long arg1, int arg2) {
-		UNSAFE.putOrderedInt(arg0, arg1, arg2);
-	}
 
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putOrderedLong(java.lang.Object, long, long)
-	 */
-	public void putOrderedLong(Object arg0, long arg1, long arg2) {
-		UNSAFE.putOrderedLong(arg0, arg1, arg2);
-	}
 
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#putOrderedObject(java.lang.Object, long, java.lang.Object)
-	 */
-	public void putOrderedObject(Object arg0, long arg1, Object arg2) {
-		UNSAFE.putOrderedObject(arg0, arg1, arg2);
-	}
+
+
+
 
 
 	/**
@@ -1015,52 +995,11 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 		UNSAFE.setMemory(arg0, arg1, arg2, arg3);
 	}
 
-	/**
-	 * @param arg0
-	 * @return
-	 * @deprecated
-	 * @see sun.misc.Unsafe#staticFieldBase(java.lang.Class)
-	 */
-	public Object staticFieldBase(Class arg0) {
-		return UNSAFE.staticFieldBase(arg0);
-	}
-
-	/**
-	 * @param arg0
-	 * @return
-	 * @see sun.misc.Unsafe#staticFieldBase(java.lang.reflect.Field)
-	 */
-	public Object staticFieldBase(Field arg0) {
-		return UNSAFE.staticFieldBase(arg0);
-	}
-
-
-	/**
-	 * @param arg0
-	 * @see sun.misc.Unsafe#throwException(java.lang.Throwable)
-	 */
-	public void throwException(Throwable arg0) {
-		UNSAFE.throwException(arg0);
-	}
 
 
 
-	/**
-	 * @param arg0
-	 * @return
-	 * @see sun.misc.Unsafe#tryMonitorEnter(java.lang.Object)
-	 */
-	public boolean tryMonitorEnter(Object arg0) {
-		return UNSAFE.tryMonitorEnter(arg0);
-	}
 
-	/**
-	 * @param arg0
-	 * @see sun.misc.Unsafe#unpark(java.lang.Object)
-	 */
-	public void unpark(Object arg0) {
-		UNSAFE.unpark(arg0);
-	}
+
 	
 	/**
 	 * Low maintenance out logger
