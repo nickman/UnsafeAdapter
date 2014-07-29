@@ -162,7 +162,7 @@ public class UnsafeAdapter {
 	 * @return the size in bytes of a native memory page
 	 * @see sun.misc.Unsafe#pageSize()
 	 */
-	public int pageSize() {
+	public static int pageSize() {
 		return theUNSAFE.pageSize();
 	}
 	
@@ -204,7 +204,7 @@ public class UnsafeAdapter {
 	 * @param throwable The throwable to throw
 	 * @see sun.misc.Unsafe#throwException(java.lang.Throwable)
 	 */
-	public void throwException(Throwable throwable) {
+	public static void throwException(Throwable throwable) {
 		theUNSAFE.throwException(throwable);
 	}
 	
@@ -426,7 +426,7 @@ public class UnsafeAdapter {
 	 * @deprecated As - of 1.4.1, use #staticFieldBase(Field) to obtain the base pertaining to a specific Field .  
 	 * @see sun.misc.Unsafe#staticFieldBase(java.lang.Class)
 	 */
-	public Object staticFieldBase(Class<?> clazz) {
+	public static Object staticFieldBase(Class<?> clazz) {
 		return theUNSAFE.staticFieldBase(clazz);
 	}
 
@@ -441,7 +441,7 @@ public class UnsafeAdapter {
 	 * @return the offset of the given static field in the fields declaring class
 	 * @see sun.misc.Unsafe#staticFieldBase(java.lang.reflect.Field)
 	 */
-	public Object staticFieldBase(Field field) {
+	public static Object staticFieldBase(Field field) {
 		return theUNSAFE.staticFieldBase(field);
 	}
 	
@@ -454,7 +454,7 @@ public class UnsafeAdapter {
 	 * @param object The object to lock
 	 * @see sun.misc.Unsafe#monitorEnter(java.lang.Object)
 	 */
-	public void monitorEnter(Object object) {
+	public static void monitorEnter(Object object) {
 		theUNSAFE.monitorEnter(object);
 	}
 
@@ -463,7 +463,7 @@ public class UnsafeAdapter {
 	 * @param object THe object to unlock
 	 * @see sun.misc.Unsafe#monitorExit(java.lang.Object)
 	 */
-	public void monitorExit(Object object) {
+	public static void monitorExit(Object object) {
 		theUNSAFE.monitorExit(object);
 	}
 	
@@ -475,7 +475,7 @@ public class UnsafeAdapter {
 	 * @return true if the object was successfully locked, false otherwise
 	 * @see sun.misc.Unsafe#tryMonitorEnter(java.lang.Object)
 	 */
-	public boolean tryMonitorEnter(Object object) {
+	public static boolean tryMonitorEnter(Object object) {
 		return theUNSAFE.tryMonitorEnter(object);
 	}
 	
@@ -494,7 +494,7 @@ public class UnsafeAdapter {
 	 * @param time the time to park for
 	 * @see sun.misc.Unsafe#park(boolean, long)
 	 */
-	public void park(boolean isAbsolute, long time) {
+	public static void park(boolean isAbsolute, long time) {
 		theUNSAFE.park(isAbsolute, time);
 	}	
 	
@@ -511,7 +511,7 @@ public class UnsafeAdapter {
 	 * @param thread The thread to unpark
 	 * @see sun.misc.Unsafe#unpark(java.lang.Object)
 	 */
-	public void unpark(Object thread) {
+	public static void unpark(Object thread) {
 		theUNSAFE.unpark(thread);
 	}
 	
@@ -547,7 +547,7 @@ public class UnsafeAdapter {
 	 * @return the address read 
 	 * @see sun.misc.Unsafe#getAddress(long)
 	 */
-	public long getAddress(long address) {
+	public static long getAddress(long address) {
 		return adapter.getAddress(address);
 	}
 	
@@ -557,11 +557,11 @@ public class UnsafeAdapter {
 	 * 
  	 * The number of bytes actually written at the target address maybe
 	 * determined by consulting #addressSize . 
-	 * @param targetAddress
-	 * @param address
+	 * @param targetAddress The address to write the value to
+	 * @param address The address value to write
 	 * @see sun.misc.Unsafe#putAddress(long, long)
 	 */
-	public void putAddress(long targetAddress, long address) {
+	public static void putAddress(long targetAddress, long address) {
 		adapter.putAddress(targetAddress, address);
 	}
 	
@@ -633,6 +633,34 @@ public class UnsafeAdapter {
 		return adapter.allocateAlignedMemory(size, dealloc);
 	}
 	
+	/**
+	 * Resizes a new block of native memory, to the given size in bytes. 
+	 * <b>NOTE:</b>If the caller implements {@link DeAllocateMe} and expects the allocations
+	 * to be automatically cleared, the returned value should overwrite the index of 
+	 * the {@link DeAllocateMe}'s array where the previous address was.   
+	 * @param address The address of the existing allocation
+	 * @param size The size of the new allocation in bytes
+	 * @return The address of the new allocation
+	 * @see sun.misc.Unsafe#reallocateMemory(long, long)
+	 */
+	public static long reallocateMemory(long address, long size) {
+		return adapter.reallocateMemory(address, size);
+	}
+	
+	/**
+	 * Resizes a new block of aligned (if enabled) native memory, to the given size in bytes.
+	 * <b>NOTE:</b>If the caller implements {@link DeAllocateMe} and expects the allocations
+	 * to be automatically cleared, the returned value should overwrite the index of 
+	 * the {@link DeAllocateMe}'s array where the previous address was.   
+	 * @param address The address of the existing allocation
+	 * @param size The size of the new allocation in bytes
+	 * @return The address of the new allocation
+	 * @see sun.misc.Unsafe#reallocateMemory(long, long)
+	 */
+	public static long reallocateAlignedMemory(long address, long size) {
+		return adapter.reallocateAlignedMemory(address, size);
+	}
+	
 	//===========================================================================================================
 	//	Copy Memory Ops
 	//===========================================================================================================
@@ -673,6 +701,39 @@ public class UnsafeAdapter {
 	public static void copyMemory(Object srcBase, long srcOffset, Object destBase, long destOffset, long bytes) {
 		adapter.copyMemory(srcBase, srcOffset, destBase, destOffset, bytes);
 	}
+	
+	//===========================================================================================================
+	//	Set Memory Ops
+	//===========================================================================================================	
+	
+
+	/**
+	 * Sets all bytes in a given block of memory to a fixed value (usually zero). 
+	 * @param address The address to start the set memory at
+	 * @param bytes The number of bytes to set
+	 * @param value The value to write to each byte in the specified range
+	 * @see sun.misc.Unsafe#setMemory(long, long, byte)
+	 */
+	public static void setMemory(long address, long bytes, byte value) {
+		adapter.setMemory(address, bytes, value);
+	}
+
+	/**
+	 * Sets all bytes in a given block of memory to a fixed value (usually zero).
+	 * @param object The object, the base address of which the offset is applied 
+	 * @param offset The destination object offset, or an absolute adress if the object is null
+	 * @param bytes The number of bytes to set
+	 * @param value The value to write to each byte in the specified range
+	 * @see sun.misc.Unsafe#setMemory(java.lang.Object, long, long, byte)
+	 */
+	public static void setMemory(Object object, long offset, long bytes, byte value) {
+		if(object!=null) {
+			theUNSAFE.setMemory(object, offset, bytes, value); 
+		} else {
+			adapter.setMemory(offset, bytes, value);
+		}
+	}
+	
 	
 	//===========================================================================================================
 	//	Byte Read Ops
@@ -1332,7 +1393,7 @@ public class UnsafeAdapter {
 	 * @param value The value to write
 	 * @see sun.misc.Unsafe#putOrderedInt(java.lang.Object, long, int)
 	 */
-	public void putOrderedInt(Object object, long offset, int value) {
+	public static void putOrderedInt(Object object, long offset, int value) {
 		theUNSAFE.putOrderedInt(object, offset, value);
 	}
 
@@ -1342,7 +1403,7 @@ public class UnsafeAdapter {
 	 * @param value The value to write
 	 * @see sun.misc.Unsafe#putOrderedInt(java.lang.Object, long, int)
 	 */
-	public void putOrderedInt(long offset, int value) {
+	public static void putOrderedInt(long offset, int value) {
 		adapter.putOrderedInt(offset, value);
 	}
 	
@@ -1613,7 +1674,7 @@ public class UnsafeAdapter {
 	 * @param value The value to write
 	 * @see sun.misc.Unsafe#putOrderedLong(java.lang.Object, long, long)
 	 */
-	public void putOrderedLong(Object object, long offset, long value) {
+	public static void putOrderedLong(Object object, long offset, long value) {
 		theUNSAFE.putOrderedLong(object, offset, value);
 	}
 
@@ -1623,7 +1684,7 @@ public class UnsafeAdapter {
 	 * @param value The value to write
 	 * @see sun.misc.Unsafe#putOrderedLong(java.lang.Object, long, long)
 	 */
-	public void putOrderedLong(long offset, long value) {
+	public static void putOrderedLong(long offset, long value) {
 		adapter.putOrderedLong(offset, value);
 	}
 	
@@ -1893,7 +1954,7 @@ public class UnsafeAdapter {
 	 * @param arg2
 	 * @see sun.misc.Unsafe#putOrderedObject(java.lang.Object, long, java.lang.Object)
 	 */
-	public void putOrderedObject(Object arg0, long arg1, Object arg2) {
+	public static void putOrderedObject(Object arg0, long arg1, Object arg2) {
 		theUNSAFE.putOrderedObject(arg0, arg1, arg2);
 	}
 		

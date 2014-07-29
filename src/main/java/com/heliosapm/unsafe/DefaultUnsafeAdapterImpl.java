@@ -27,7 +27,6 @@ package com.heliosapm.unsafe;
 import java.lang.management.ManagementFactory;
 import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -106,7 +105,12 @@ public class DefaultUnsafeAdapterImpl implements Runnable {
 	/** The reference cleaner thread */
 	Thread cleanerThread;
 	
+	/** The max 32bit memory size that can be cache-line aligned */
 	public static final int MAX_ALIGNED_MEM_32 = 1073741824;
+	/** The max 64bit memory size that can be cache-line aligned */
+	public static final long MAX_ALIGNED_MEM_64 = 4611686018427387904L;
+	
+		
 
 
 	
@@ -292,19 +296,16 @@ public class DefaultUnsafeAdapterImpl implements Runnable {
     /**
      * Finds the next <b><code>power of 2</code></b> higher or equal to than the passed value.
      * @param value The initial value
-     * @return the pow2
-     */
-    public static int findNextPositivePowerOfTwo(final int value) {
-    	return  1 << (32 - Integer.numberOfLeadingZeros(value - 1));
-	}    
-    
-    /**
-     * Finds the next <b><code>power of 2</code></b> higher or equal to than the passed value.
-     * @param value The initial value
-     * @return the pow2
+     * @return the next pow2 without overrunning the type size
      */
     public static long findNextPositivePowerOfTwo(final long value) {
-    	return  1 << (64 - Long.numberOfLeadingZeros(value - 1));
+    	if(UnsafeAdapter.ADDRESS_SIZE==4) {
+        	if(value > MAX_ALIGNED_MEM_32) return value;
+        	return  1 << (32 - Integer.numberOfLeadingZeros((int)value - 1));    		
+    	} else {
+        	if(value > MAX_ALIGNED_MEM_64) return value;
+        	return  1 << (64 - Long.numberOfLeadingZeros(value - 1));    		
+    	}
 	}    
     
 
@@ -332,6 +333,89 @@ public class DefaultUnsafeAdapterImpl implements Runnable {
     	}		
 		return address;
 	}
+	
+	/**
+	 * Resizes a new block of native memory, to the given size in bytes.
+	 * <b>NOTE:</b>If the caller implements {@link DeAllocateMe} and expects the allocations
+	 * to be automatically cleared, the returned value should overwrite the index of 
+	 * the {@link DeAllocateMe}'s array where the previous address was.    
+	 * @param address The address of the existing allocation
+	 * @param size The size of the new allocation in bytes
+	 * @return The address of the new allocation
+	 * @see sun.misc.Unsafe#reallocateMemory(long, long)
+	 */
+	public long reallocateMemory(long address, long size) {
+		return _reallocateMemory(address, size, 0);
+	}	
+	
+	/**
+	 * Resizes a new block of aligned (if enabled) native memory, to the given size in bytes.
+	 * <b>NOTE:</b>If the caller implements {@link DeAllocateMe} and expects the allocations
+	 * to be automatically cleared, the returned value should overwrite the index of 
+	 * the {@link DeAllocateMe}'s array where the previous address was.   
+	 * @param address The address of the existing allocation
+	 * @param size The size of the new allocation in bytes
+	 * @return The address of the new allocation
+	 * @see sun.misc.Unsafe#reallocateMemory(long, long)
+	 */
+	public long reallocateAlignedMemory(long address, long size) {
+		if(alignMem) {
+			long actual = findNextPositivePowerOfTwo(size);
+			return _reallocateMemory(address, actual, actual-size);
+		} 
+		return _reallocateMemory(address, size, 0);
+	}	
+	
+	/**
+	 * Resizes a new block of native memory, to the given size in bytes.
+	 * <b>NOTE:</b>If the caller implements {@link DeAllocateMe} and expects the allocations
+	 * to be automatically cleared, the returned value should overwrite the index of 
+	 * the {@link DeAllocateMe}'s array where the previous address was.  
+	 * @param address The address of the existing allocation
+	 * @param size The size of the new allocation in bytes
+	 * @param alignmentOverhead The established overhead of the alignment
+	 * @return The address of the new allocation
+	 * @see sun.misc.Unsafe#reallocateMemory(long, long)
+	 */
+	long _reallocateMemory(long address, long size, long alignmentOverhead) {
+		long newAddress = UNSAFE.reallocateMemory(address, size);
+		if(trackMem) {
+			// ==========================================================
+			//  Subtract pervious allocation
+			// ==========================================================				
+			long[] alloc = memoryAllocations.remove(address);
+			if(alloc!=null) {
+				totalMemoryAllocated.addAndGet(-1L * alloc[0]);
+				totalAlignmentOverhead.addAndGet(-1L * alloc[1]);
+			}
+			// ==========================================================
+			//  Add new allocation
+			// ==========================================================								
+			memoryAllocations.put(newAddress, new long[]{size, alignmentOverhead});
+			totalMemoryAllocated.addAndGet(size);
+			totalAlignmentOverhead.addAndGet(alignmentOverhead);
+		}
+		return newAddress;
+	}
+	
+	
+	//===========================================================================================================
+	//	Set Memory Ops
+	//===========================================================================================================	
+	
+
+	/**
+	 * Sets all bytes in a given block of memory to a fixed value (usually zero). 
+	 * @param address The address to start the set memory at
+	 * @param bytes The number of bytes to set
+	 * @param value The value to write to each byte in the specified range
+	 * @see sun.misc.Unsafe#setMemory(long, long, byte)
+	 */
+	public void setMemory(long address, long bytes, byte value) {
+		UNSAFE.setMemory(address, bytes, value);
+	}
+
+	
 	
 	//===========================================================================================================
 	//	Free Memory Ops
@@ -431,8 +515,8 @@ public class DefaultUnsafeAdapterImpl implements Runnable {
 	 * 
  	 * The number of bytes actually written at the target address maybe
 	 * determined by consulting #addressSize . 
-	 * @param targetAddress
-	 * @param address
+	 * @param targetAddress The address to write the address to
+	 * @param address The address to write
 	 * @see sun.misc.Unsafe#putAddress(long, long)
 	 */
 	public void putAddress(long targetAddress, long address) {
@@ -951,55 +1035,6 @@ public class DefaultUnsafeAdapterImpl implements Runnable {
 
 
 	//===========================================================================================================
-
-
-
-
-
-
-
-
-
-
-
-
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @see sun.misc.Unsafe#reallocateMemory(long, long)
-	 */
-	public long reallocateMemory(long arg0, long arg1) {
-		return UNSAFE.reallocateMemory(arg0, arg1);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @see sun.misc.Unsafe#setMemory(long, long, byte)
-	 */
-	public void setMemory(long arg0, long arg1, byte arg2) {
-		UNSAFE.setMemory(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @param arg3
-	 * @see sun.misc.Unsafe#setMemory(java.lang.Object, long, long, byte)
-	 */
-	public void setMemory(Object arg0, long arg1, long arg2, byte arg3) {
-		UNSAFE.setMemory(arg0, arg1, arg2, arg3);
-	}
-
-
-
-
-
-
 	
 	/**
 	 * Low maintenance out logger
