@@ -37,6 +37,8 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
 
+import com.heliosapm.unsafe.UnsafeAdapterOld.MemoryAllocationReference;
+
 import sun.misc.Unsafe;
 
 /**
@@ -61,11 +63,11 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 	// =========================================================
 	
     /** The unsafe instance */    
-	static final Unsafe UNSAFE;
+	static final Unsafe UNSAFE = UnsafeAdapter.theUNSAFE;
     /** Indicates if the 5 param copy memory is supported */
-    public static final boolean FIVE_COPY;
+    public static final boolean FIVE_COPY = UnsafeAdapter.FIVE_COPY;
     /** Indicates if the 4 param set memory is supported */
-    public static final boolean FOUR_SET;	
+    public static final boolean FOUR_SET = UnsafeAdapter.FOUR_SET;	
 	
 	/** The system prop indicating that allocations should be tracked */
 	public static final String TRACK_ALLOCS_PROP = "unsafe.allocations.track";
@@ -75,12 +77,6 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 	public static final String AGENT_LIB = "-agentlib:";	
 	/** The legacy debug agent library signature */
 	public static final String LEGACY_AGENT_LIB = "-Xrunjdwp:";
-    /** The address size */
-    public static final int ADDRESS_SIZE;
-    /** Byte array offset */
-    public static final int BYTES_OFFSET;
-    /** Object array offset */
-    public static final long OBJECTS_OFFSET;
     /** Serial number factory for memory allocationreferences */
     private static final AtomicLong refIndexFactory = new AtomicLong(0L);
     /** Empty long[] array const */
@@ -114,7 +110,7 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 	/** The reference cleaner thread */
 	Thread cleanerThread;
 	
-	
+	public static final int MAX_ALIGNED_MEM_32 = 1073741824;
 
 
 	
@@ -135,39 +131,6 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 
 	
 
-	static {
-		// =========================================================
-		// Acquire the unsafe instance
-		// =========================================================
-		try {
-            Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
-            theUnsafe.setAccessible(true);
-            UNSAFE = (Unsafe) theUnsafe.get(null);			
-		} catch (Exception ex) {
-			throw new RuntimeException("Failed to access sun.misc.Unsafe.theUnsafe", ex);
-		}
-		// =========================================================
-		// Determine which version of unsafe we're using
-		// =========================================================
-        int copyMemCount = 0;
-        int setMemCount = 0;
-        for(Method method: Unsafe.class.getDeclaredMethods()) {
-        	if("copyMemory".equals(method.getName())) {
-        		copyMemCount++;
-        	}
-        	if("setMemory".equals(method.getName())) {
-        		setMemCount++;
-        	}
-        }
-        FIVE_COPY = copyMemCount>1;
-        FOUR_SET = setMemCount>1;
-		// =========================================================
-		// Get the sizes of commonly used references
-		// =========================================================        
-        ADDRESS_SIZE = UNSAFE.addressSize();
-        BYTES_OFFSET = UNSAFE.arrayBaseOffset(byte[].class);
-        OBJECTS_OFFSET = UNSAFE.arrayBaseOffset(Object[].class);        
-	}
 	
 	/**
 	 * Creates a new DefaultUnsafeAdapterImpl
@@ -242,6 +205,10 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 		log("Unsafe Cleaner Thread [%s] Terminated", Thread.currentThread().getName());
 	}
 	
+	/**
+	 * Returns the number of pending references in the reference queue
+	 * @return the number of pending references
+	 */
 	public int getPending() {
 		return -1;
 	}
@@ -266,40 +233,9 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 		return false;
 	}
 	
-	/**
-     * Returns the address of the passed object
-     * @param obj The object to get the address of 
-     * @return the address of the passed object or zero if the passed object is null
-     */
-    public static long getAddressOf(Object obj) {
-    	if(obj==null) return 0;
-    	Object[] array = new Object[] {obj};
-    	return ADDRESS_SIZE==4 ? UNSAFE.getInt(array, OBJECTS_OFFSET) : UNSAFE.getLong(array, OBJECTS_OFFSET);
-    }	
-	
-
-	/**
-	 * Report the size in bytes of a native pointer, as stored via #putAddress.
-	 * This value will be either 4 or 8.  Note that the sizes of other primitive 
-	 * types (as stored in native memory blocks) are determined fully by their information content.
-	 * @return The size in bytes of a native pointer
-	 * @see sun.misc.Unsafe#addressSize()
-	 */
-	public int addressSize() {
-		return UNSAFE.addressSize();
-	}
-
-	/**
-	 * Allocate an instance but do not run an constructor. 
-	 * Initializes the class if it has not yet been.
-	 * @param clazz The class to allocate an instance of
-	 * @return The created object instance
-	 * @throws InstantiationException thrown on a failure to instantiate
-	 * @see sun.misc.Unsafe#allocateInstance(java.lang.Class)
-	 */
-	public Object allocateInstance(Class<?> clazz) throws InstantiationException {
-		return UNSAFE.allocateInstance(clazz);
-	}
+	//===========================================================================================================
+	//	Allocate Memory Ops
+	//===========================================================================================================	
 
 	/**
 	 * Allocates a new block of native memory, of the given size in bytes. 
@@ -311,25 +247,100 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 	 * @see sun.misc.Unsafe#allocateMemory(long)
 	 */
 	public long allocateMemory(long size) {
-		return _allocateMemory(size, 0L);
+		return _allocateMemory(size, 0L, null);
 	}
 	
 	/**
 	 * Allocates a chunk of memory and returns its address
 	 * @param size The number of bytes to allocate
-	 * @param alignmentOverhead The number of bytes allocated in excess of requested for alignment
+	 * @param dealloc The optional deallocatable to register for deallocation when it becomes phantom reachable
 	 * @return The address of the allocated memory
 	 * @see sun.misc.Unsafe#allocateMemory(long)
 	 */
-	long _allocateMemory(long size, long alignmentOverhead) {
+	public long allocateMemory(long size, DeAllocateMe dealloc) {
+		return _allocateMemory(size, 0L, dealloc);
+	}	
+	
+	
+	/**
+	 * Allocates a new block of cache-line aligned native memory, of the given size in bytes rounded up to the nearest power of 2. 
+	 * The contents of the memory are uninitialized; they will generally be garbage.
+	 * The resulting native pointer will never be zero, and will be aligned for all value types.  
+	 * Dispose of this memory by calling #freeMemory , or resize it with #reallocateMemory.
+	 * @param size The size of the block of memory to allocate in bytes
+	 * @return The address of the allocated memory block
+	 * @see sun.misc.Unsafe#allocateMemory(long)
+	 */
+	public long allocateAlignedMemory(long size) {
+		return allocateAlignedMemory(size, null);
+	}
+	
+	/**
+	 * Allocates a new block of cache-line aligned native memory, of the given size in bytes rounded up to the nearest power of 2. 
+	 * The contents of the memory are uninitialized; they will generally be garbage.
+	 * The resulting native pointer will never be zero, and will be aligned for all value types.  
+	 * Dispose of this memory by calling #freeMemory , or resize it with #reallocateMemory.
+	 * @param size The size of the block of memory to allocate in bytes
+	 * @param dealloc The optional deallocatable to register for deallocation when it becomes phantom reachable
+	 * @return The address of the allocated memory block
+	 * @see sun.misc.Unsafe#allocateMemory(long)
+	 */
+	public long allocateAlignedMemory(long size, DeAllocateMe dealloc) {
+		if(alignMem) {
+			long alignedSize = UnsafeAdapter.ADDRESS_SIZE==4 ? findNextPositivePowerOfTwo((int)size) : findNextPositivePowerOfTwo((int)size);
+			return _allocateMemory(alignedSize, alignedSize-size, dealloc);
+		}
+		return _allocateMemory(size, 0L, dealloc);		
+	}
+	
+    /**
+     * Finds the next <b><code>power of 2</code></b> higher or equal to than the passed value.
+     * @param value The initial value
+     * @return the pow2
+     */
+    public static int findNextPositivePowerOfTwo(final int value) {
+    	return  1 << (32 - Integer.numberOfLeadingZeros(value - 1));
+	}    
+    
+    /**
+     * Finds the next <b><code>power of 2</code></b> higher or equal to than the passed value.
+     * @param value The initial value
+     * @return the pow2
+     */
+    public static long findNextPositivePowerOfTwo(final long value) {
+    	return  1 << (64 - Long.numberOfLeadingZeros(value - 1));
+	}    
+    
+
+	/**
+	 * Allocates a chunk of memory and returns its address
+	 * @param size The number of bytes to allocate
+	 * @param alignmentOverhead The number of bytes allocated in excess of requested for alignment
+	 * @param deallocator The reference to the object which when collected will deallocate the referenced addresses
+	 * @return The address of the allocated memory
+	 * @see sun.misc.Unsafe#allocateMemory(long)
+	 */
+	@SuppressWarnings("unused")
+	long _allocateMemory(long size, long alignmentOverhead, DeAllocateMe deallocator) {
 		long address = UNSAFE.allocateMemory(size);
 		if(trackMem) {		
 			memoryAllocations.put(address, new long[]{size, alignmentOverhead});
 			totalMemoryAllocated.addAndGet(size);
 			totalAlignmentOverhead.addAndGet(alignmentOverhead);
 		}
+    	if(deallocator!=null) {
+    		long[][] addresses = deallocator.getAddresses();
+    		if(addresses==null || addresses.length==0) {
+    			new MemoryAllocationReference(deallocator);
+    		}
+    	}		
 		return address;
 	}
+	
+	//===========================================================================================================
+	//	Free Memory Ops
+	//===========================================================================================================	
+	
 	
 	/**
 	 * Frees the memory allocated at the passed address
@@ -350,273 +361,284 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 		UNSAFE.freeMemory(address);
 	}
 	
+	//===========================================================================================================
+	//	Copy Memory Ops
+	//===========================================================================================================	
 	
 
 	/**
-	 * @param arg0
-	 * @return
-	 * @see sun.misc.Unsafe#arrayBaseOffset(java.lang.Class)
-	 */
-	public int arrayBaseOffset(Class arg0) {
-		return UNSAFE.arrayBaseOffset(arg0);
-	}
-
-	/**
-	 * @param arg0
-	 * @return
-	 * @see sun.misc.Unsafe#arrayIndexScale(java.lang.Class)
-	 */
-	public int arrayIndexScale(Class arg0) {
-		return UNSAFE.arrayIndexScale(arg0);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @param arg3
-	 * @return
-	 * @see sun.misc.Unsafe#compareAndSwapInt(java.lang.Object, long, int, int)
-	 */
-	public final boolean compareAndSwapInt(Object arg0, long arg1, int arg2,
-			int arg3) {
-		return UNSAFE.compareAndSwapInt(arg0, arg1, arg2, arg3);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @param arg3
-	 * @return
-	 * @see sun.misc.Unsafe#compareAndSwapLong(java.lang.Object, long, long, long)
-	 */
-	public final boolean compareAndSwapLong(Object arg0, long arg1, long arg2,
-			long arg3) {
-		return UNSAFE.compareAndSwapLong(arg0, arg1, arg2, arg3);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @param arg3
-	 * @return
-	 * @see sun.misc.Unsafe#compareAndSwapObject(java.lang.Object, long, java.lang.Object, java.lang.Object)
-	 */
-	public final boolean compareAndSwapObject(Object arg0, long arg1,
-			Object arg2, Object arg3) {
-		return UNSAFE.compareAndSwapObject(arg0, arg1, arg2, arg3);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
+	 * Sets all bytes in a given block of memory to a copy of another block. This provides a single-register addressing mode, 
+	 * as discussed in #getInt(Object,long). 
+	 * Equivalent to copyMemory(null, srcAddress, null, destAddress, bytes).
+	 * @param srcOffset The source object offset, or an absolute adress if srcBase is null
+	 * @param destOffset The destination object offset, or an absolute adress if destBase is null
+	 * @param bytes The bytes to copy
 	 * @see sun.misc.Unsafe#copyMemory(long, long, long)
 	 */
-	public void copyMemory(long arg0, long arg1, long arg2) {
-		UNSAFE.copyMemory(arg0, arg1, arg2);
+	public void copyMemory(long srcOffset, long destOffset, long bytes) {
+		UNSAFE.copyMemory(srcOffset, destOffset, bytes);
 	}
 
 	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @param arg3
-	 * @param arg4
+	 * Sets all bytes in a given block of memory to a copy of another block.
+	 * 
+	 * This method determines each block's base address by means of two parameters,
+	 * and so it provides (in effect) a double-register addressing mode,
+	 * as discussed in #getInt(Object,long) .  When the object reference is null,
+	 * the offset supplies an absolute base address.
+	 * 
+	 * The transfers are in coherent (atomic) units of a size determined
+	 * by the address and length parameters.  If the effective addresses and
+	 * length are all even modulo 8, the transfer takes place in 'long' units.
+	 * If the effective addresses and length are (resp.) even modulo 4 or 2,
+	 * the transfer takes place in units of 'int' or 'short'.
+	 * @param srcBase The source object. Can be null, in which case srcOffset will be assumed to be an absolute address.
+	 * @param srcOffset The source object offset, or an absolute adress if srcBase is null
+	 * @param destBase The destination object. Can be null, in which case destOffset will be assumed to be an absolute address.
+	 * @param destOffset The destination object offset, or an absolute adress if destBase is null
+	 * @param bytes The bytes to copy
 	 * @see sun.misc.Unsafe#copyMemory(java.lang.Object, long, java.lang.Object, long, long)
 	 */
-	public void copyMemory(Object arg0, long arg1, Object arg2, long arg3,
-			long arg4) {
-		UNSAFE.copyMemory(arg0, arg1, arg2, arg3, arg4);
+	public void copyMemory(Object srcBase, long srcOffset, Object destBase, long destOffset, long bytes) {
+    	if(UnsafeAdapter.FIVE_COPY) {
+    		UNSAFE.copyMemory(srcBase, srcOffset, destBase, destOffset, bytes);
+    	} else {
+    		UNSAFE.copyMemory(srcOffset + UnsafeAdapter.getAddressOf(srcBase), destOffset + UnsafeAdapter.getAddressOf(destBase), bytes);
+    	}		
 	}
 
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @return
-	 * @see sun.misc.Unsafe#defineAnonymousClass(java.lang.Class, byte[], java.lang.Object[])
-	 */
-	public Class defineAnonymousClass(Class arg0, byte[] arg1, Object[] arg2) {
-		return UNSAFE.defineAnonymousClass(arg0, arg1, arg2);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @param arg3
-	 * @param arg4
-	 * @param arg5
-	 * @return
-	 * @see sun.misc.Unsafe#defineClass(java.lang.String, byte[], int, int, java.lang.ClassLoader, java.security.ProtectionDomain)
-	 */
-	public Class defineClass(String arg0, byte[] arg1, int arg2, int arg3,
-			ClassLoader arg4, ProtectionDomain arg5) {
-		return UNSAFE.defineClass(arg0, arg1, arg2, arg3, arg4, arg5);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
-	 * @param arg3
-	 * @return
-	 * @deprecated
-	 * @see sun.misc.Unsafe#defineClass(java.lang.String, byte[], int, int)
-	 */
-	public Class defineClass(String arg0, byte[] arg1, int arg2, int arg3) {
-		return UNSAFE.defineClass(arg0, arg1, arg2, arg3);
-	}
-
-	/**
-	 * @param arg0
-	 * @see sun.misc.Unsafe#ensureClassInitialized(java.lang.Class)
-	 */
-	public void ensureClassInitialized(Class arg0) {
-		UNSAFE.ensureClassInitialized(arg0);
-	}
-
-	/**
-	 * @param obj
-	 * @return
-	 * @see java.lang.Object#equals(java.lang.Object)
-	 */
-	public boolean equals(Object obj) {
-		return UNSAFE.equals(obj);
-	}
-
-	/**
-	 * @param arg0
-	 * @return
-	 * @deprecated
-	 * @see sun.misc.Unsafe#fieldOffset(java.lang.reflect.Field)
-	 */
-	public int fieldOffset(Field arg0) {
-		return UNSAFE.fieldOffset(arg0);
-	}
+	//===========================================================================================================
+	//	Address Read Ops
+	//===========================================================================================================	
 
 	
 	/**
-	 * @param arg0
-	 * @return
+	 * Fetches a native pointer from a given memory address.  If the address is
+	 * zero, or does not point into a block obtained from #allocateMemory , the results are undefined.
+	 * 
+	 * If the native pointer is less than 64 bits wide, it is extended as
+	 * an unsigned number to a Java long.  The pointer may be indexed by any
+	 * given byte offset, simply by adding that offset (as a simple integer) to
+	 * the long representing the pointer.  The number of bytes actually read
+	 * from the target address maybe determined by consulting #addressSize .
+	 * @param address The address to read the address from
+	 * @return the address read 
 	 * @see sun.misc.Unsafe#getAddress(long)
 	 */
-	public long getAddress(long arg0) {
-		return UNSAFE.getAddress(arg0);
+	public long getAddress(long address) {
+		return UNSAFE.getAddress(address);
 	}
+	
+	//===========================================================================================================
+	//	Byte Read Ops
+	//===========================================================================================================		
 
 	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @deprecated
-	 * @see sun.misc.Unsafe#getBoolean(java.lang.Object, int)
+	 * Fetches a value from a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from {@link #allocateMemory} , the
+	 * results are undefined. 
+	 * @param address The address to read the value from
+	 * @return the read value
 	 */
-	public boolean getBoolean(Object arg0, int arg1) {
-		return UNSAFE.getBoolean(arg0, arg1);
+	public byte getByte(long address) {
+		return UNSAFE.getByte(address);
 	}
-
+	
 	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @see sun.misc.Unsafe#getBoolean(java.lang.Object, long)
+	 * Volatile version of {@link #getByte(long)}.
+	 * @param address The address to read the value from
+	 * @return the read value
+	 * @see sun.misc.Unsafe#getByteVolatile(Object, long)
 	 */
-	public boolean getBoolean(Object arg0, long arg1) {
-		return UNSAFE.getBoolean(arg0, arg1);
+	public byte getByteVolatile(long address) {
+		return UNSAFE.getByteVolatile(null, address);
 	}
-
+	
+	
+	//===========================================================================================================
+	//	Boolean Read Ops
+	//===========================================================================================================	
+	
+	
 	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @see sun.misc.Unsafe#getBooleanVolatile(java.lang.Object, long)
+	 * Fetches a value from a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from {@link #allocateMemory} , the
+	 * results are undefined. 
+	 * @param address The address to read the value from
+	 * @return the read value
 	 */
-	public boolean getBooleanVolatile(Object arg0, long arg1) {
-		return UNSAFE.getBooleanVolatile(arg0, arg1);
+	public boolean getBoolean(long address) {
+		return UNSAFE.getBoolean(null, address);
 	}
 
 	/**
-	 * @param arg0
-	 * @return
-	 * @see sun.misc.Unsafe#getByte(long)
+	 * Volatile version of {@link UnsafeAdapter#getBoolean(Object, long)} 
+	 * @param address The address to read the boolean from
+	 * @return the read boolean value
 	 */
-	public byte getByte(long arg0) {
-		return UNSAFE.getByte(arg0);
+	public boolean getBooleanVolatile(long address) {
+		return UNSAFE.getBooleanVolatile(null, address);
 	}
-
+	
+	//===========================================================================================================
+	//	Short Read Ops
+	//===========================================================================================================		
+	
 	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @deprecated
-	 * @see sun.misc.Unsafe#getByte(java.lang.Object, int)
+	 * Fetches a value from a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from {@link #allocateMemory}, the
+	 * results are undefined. 
+	 * @param address The address to read the value from
+	 * @return the read value
 	 */
-	public byte getByte(Object arg0, int arg1) {
-		return UNSAFE.getByte(arg0, arg1);
+	public short getShort(long address) {
+		return UNSAFE.getShort(address);
 	}
-
+	
 	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @see sun.misc.Unsafe#getByte(java.lang.Object, long)
+	 * Volatile version of {@link #getShort(long)}.
+	 * @param address The address to read the value from
+	 * @return the read value
+	 * @see sun.misc.Unsafe#getByteVolatile(Object, long)
 	 */
-	public byte getByte(Object arg0, long arg1) {
-		return UNSAFE.getByte(arg0, arg1);
+	public short getShortVolatile(long address) {
+		return UNSAFE.getShortVolatile(null, address);
 	}
+	
+	//===========================================================================================================
+	//	Char Read Ops
+	//===========================================================================================================
 
 	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @see sun.misc.Unsafe#getByteVolatile(java.lang.Object, long)
-	 */
-	public byte getByteVolatile(Object arg0, long arg1) {
-		return UNSAFE.getByteVolatile(arg0, arg1);
-	}
-
-	/**
-	 * @param arg0
-	 * @return
+	 * Fetches a value from a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from {@link #allocateMemory}, the
+	 * results are undefined. 
+	 * @param address The address to read the value from
+	 * @return the read value
 	 * @see sun.misc.Unsafe#getChar(long)
 	 */
-	public char getChar(long arg0) {
-		return UNSAFE.getChar(arg0);
+	public char getChar(long address) {
+		return UNSAFE.getChar(address);
 	}
 
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @deprecated
-	 * @see sun.misc.Unsafe#getChar(java.lang.Object, int)
-	 */
-	public char getChar(Object arg0, int arg1) {
-		return UNSAFE.getChar(arg0, arg1);
-	}
 
 	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @see sun.misc.Unsafe#getChar(java.lang.Object, long)
-	 */
-	public char getChar(Object arg0, long arg1) {
-		return UNSAFE.getChar(arg0, arg1);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
+	 * Volatile version of {@link #getShort(long)}.
+	 * @param address The address to read the value from
+	 * @return the read value
 	 * @see sun.misc.Unsafe#getCharVolatile(java.lang.Object, long)
 	 */
-	public char getCharVolatile(Object arg0, long arg1) {
-		return UNSAFE.getCharVolatile(arg0, arg1);
+	public char getCharVolatile(long address) {
+		return UNSAFE.getCharVolatile(null, address);
+	}
+	
+	
+	//===========================================================================================================
+	//	Int Read Ops
+	//===========================================================================================================
+	
+	/**
+	 * Fetches a value from a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from {@link #allocateMemory} , the
+	 * results are undefined. 
+	 * @param address The address to read the value from
+	 * @return the read value
+	 * @see sun.misc.Unsafe#getInt(long)
+	 */
+	public int getInt(long address) {
+		return UNSAFE.getInt(address);
+	}
+
+
+	/**
+	 * Volatile version of {@link #getInt(long)}.
+	 * @param address The address to read the value from
+	 * @return the read value
+	 * @see sun.misc.Unsafe#getIntVolatile(java.lang.Object, long)
+	 */
+	public int getIntVolatile(long address) {
+		return UNSAFE.getIntVolatile(null, address);
+	}
+	
+	//===========================================================================================================
+	//	Float Read Ops
+	//===========================================================================================================
+	
+	/**
+	 * Fetches a value from a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from {@link #allocateMemory} , the
+	 * results are undefined. 
+	 * @param address The address to read the value from
+	 * @return the read value
+	 * @see sun.misc.Unsafe#getInt(long)
+	 */
+	public float getFloat(long address) {
+		return UNSAFE.getFloat(address);
+	}
+
+
+	/**
+	 * Volatile version of {@link #getFloat(long)}.
+	 * @param address The address to read the value from
+	 * @return the read value
+	 * @see sun.misc.Unsafe#getFloatVolatile(java.lang.Object, long)
+	 */
+	public float getFloatVolatile(long address) {
+		return UNSAFE.getFloatVolatile(null, address);
+	}
+	
+	//===========================================================================================================
+	//	Long Read Ops
+	//===========================================================================================================
+	
+	/**
+	 * Fetches a value from a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from {@link #allocateMemory} , the
+	 * results are undefined. 
+	 * @param address The address to read the value from
+	 * @return the read value
+	 * @see sun.misc.Unsafe#getLong(long)
+	 */
+	public long getLong(long address) {
+		return UNSAFE.getLong(address);
+	}
+
+
+	/**
+	 * Volatile version of {@link #getFloat(long)}.
+	 * @param address The address to read the value from
+	 * @return the read value
+	 * @see sun.misc.Unsafe#getFloatVolatile(java.lang.Object, long)
+	 */
+	public long getLongVolatile(long address) {
+		return UNSAFE.getLongVolatile(null, address);
+	}
+	
+	//===========================================================================================================
+	//	Double Read Ops
+	//===========================================================================================================
+	
+	/**
+	 * Fetches a value from a given memory address.  If the address is zero, or
+	 * does not point into a block obtained from {@link #allocateMemory} , the
+	 * results are undefined. 
+	 * @param address The address to read the value from
+	 * @return the read value
+	 * @see sun.misc.Unsafe#getLong(long)
+	 */
+	public long getLong(long address) {
+		return UNSAFE.getLong(address);
+	}
+
+
+	/**
+	 * Volatile version of {@link #getFloat(long)}.
+	 * @param address The address to read the value from
+	 * @return the read value
+	 * @see sun.misc.Unsafe#getFloatVolatile(java.lang.Object, long)
+	 */
+	public long getLongVolatile(long address) {
+		return UNSAFE.getLongVolatile(null, address);
 	}
 
 	/**
@@ -659,85 +681,7 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 		return UNSAFE.getDoubleVolatile(arg0, arg1);
 	}
 
-	/**
-	 * @param arg0
-	 * @return
-	 * @see sun.misc.Unsafe#getFloat(long)
-	 */
-	public float getFloat(long arg0) {
-		return UNSAFE.getFloat(arg0);
-	}
 
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @deprecated
-	 * @see sun.misc.Unsafe#getFloat(java.lang.Object, int)
-	 */
-	public float getFloat(Object arg0, int arg1) {
-		return UNSAFE.getFloat(arg0, arg1);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @see sun.misc.Unsafe#getFloat(java.lang.Object, long)
-	 */
-	public float getFloat(Object arg0, long arg1) {
-		return UNSAFE.getFloat(arg0, arg1);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @see sun.misc.Unsafe#getFloatVolatile(java.lang.Object, long)
-	 */
-	public float getFloatVolatile(Object arg0, long arg1) {
-		return UNSAFE.getFloatVolatile(arg0, arg1);
-	}
-
-	/**
-	 * @param arg0
-	 * @return
-	 * @see sun.misc.Unsafe#getInt(long)
-	 */
-	public int getInt(long arg0) {
-		return UNSAFE.getInt(arg0);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @deprecated
-	 * @see sun.misc.Unsafe#getInt(java.lang.Object, int)
-	 */
-	public int getInt(Object arg0, int arg1) {
-		return UNSAFE.getInt(arg0, arg1);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @see sun.misc.Unsafe#getInt(java.lang.Object, long)
-	 */
-	public int getInt(Object arg0, long arg1) {
-		return UNSAFE.getInt(arg0, arg1);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @see sun.misc.Unsafe#getIntVolatile(java.lang.Object, long)
-	 */
-	public int getIntVolatile(Object arg0, long arg1) {
-		return UNSAFE.getIntVolatile(arg0, arg1);
-	}
 
 	/**
 	 * @param arg0
@@ -749,45 +693,6 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 		return UNSAFE.getLoadAverage(arg0, arg1);
 	}
 
-	/**
-	 * @param arg0
-	 * @return
-	 * @see sun.misc.Unsafe#getLong(long)
-	 */
-	public long getLong(long arg0) {
-		return UNSAFE.getLong(arg0);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @deprecated
-	 * @see sun.misc.Unsafe#getLong(java.lang.Object, int)
-	 */
-	public long getLong(Object arg0, int arg1) {
-		return UNSAFE.getLong(arg0, arg1);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @see sun.misc.Unsafe#getLong(java.lang.Object, long)
-	 */
-	public long getLong(Object arg0, long arg1) {
-		return UNSAFE.getLong(arg0, arg1);
-	}
-
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @see sun.misc.Unsafe#getLongVolatile(java.lang.Object, long)
-	 */
-	public long getLongVolatile(Object arg0, long arg1) {
-		return UNSAFE.getLongVolatile(arg0, arg1);
-	}
 
 	/**
 	 * @param arg0
@@ -820,45 +725,9 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 		return UNSAFE.getObjectVolatile(arg0, arg1);
 	}
 
-	/**
-	 * @param arg0
-	 * @return
-	 * @see sun.misc.Unsafe#getShort(long)
-	 */
-	public short getShort(long arg0) {
-		return UNSAFE.getShort(arg0);
-	}
 
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @deprecated
-	 * @see sun.misc.Unsafe#getShort(java.lang.Object, int)
-	 */
-	public short getShort(Object arg0, int arg1) {
-		return UNSAFE.getShort(arg0, arg1);
-	}
 
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @see sun.misc.Unsafe#getShort(java.lang.Object, long)
-	 */
-	public short getShort(Object arg0, long arg1) {
-		return UNSAFE.getShort(arg0, arg1);
-	}
 
-	/**
-	 * @param arg0
-	 * @param arg1
-	 * @return
-	 * @see sun.misc.Unsafe#getShortVolatile(java.lang.Object, long)
-	 */
-	public short getShortVolatile(Object arg0, long arg1) {
-		return UNSAFE.getShortVolatile(arg0, arg1);
-	}
 
 	/**
 	 * @return
@@ -884,14 +753,6 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 		UNSAFE.monitorExit(arg0);
 	}
 
-	/**
-	 * @param arg0
-	 * @return
-	 * @see sun.misc.Unsafe#objectFieldOffset(java.lang.reflect.Field)
-	 */
-	public long objectFieldOffset(Field arg0) {
-		return UNSAFE.objectFieldOffset(arg0);
-	}
 
 	/**
 	 * @return
@@ -1341,14 +1202,6 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 		return UNSAFE.staticFieldBase(arg0);
 	}
 
-	/**
-	 * @param arg0
-	 * @return
-	 * @see sun.misc.Unsafe#staticFieldOffset(java.lang.reflect.Field)
-	 */
-	public long staticFieldOffset(Field arg0) {
-		return UNSAFE.staticFieldOffset(arg0);
-	}
 
 	/**
 	 * @param arg0
@@ -1358,13 +1211,7 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 		UNSAFE.throwException(arg0);
 	}
 
-	/**
-	 * @return
-	 * @see java.lang.Object#toString()
-	 */
-	public String toString() {
-		return UNSAFE.toString();
-	}
+
 
 	/**
 	 * @param arg0
@@ -1441,8 +1288,7 @@ class DefaultUnsafeAdapterImpl implements Runnable {
 			}
 			super.clear();
 		}
-
     }
 	
-	
+    	
 }

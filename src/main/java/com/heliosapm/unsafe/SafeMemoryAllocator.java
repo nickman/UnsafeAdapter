@@ -483,7 +483,7 @@ public class SafeMemoryAllocator implements Runnable {
 			if(size > Integer.MAX_VALUE || size < 1) throw new IllegalArgumentException("Invalid Safe Memory Size [" + size + "]", new Throwable());
 			this.size = size;
 			block = onHeap ? ByteBuffer.allocate((int)size) : ByteBuffer.allocateDirect((int)size);
-			startRange = DefaultUnsafeAdapterImpl.getAddressOf(block);
+			startRange = UnsafeAdapter.getAddressOf(block);
 			endRange = startRange + size;
 			range = Range.range(startRange, endRange);
 		}

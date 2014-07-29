@@ -88,7 +88,7 @@ public class SafeAdapterImpl extends DefaultUnsafeAdapterImpl {
 	long _allocateMemory(long size, long alignmentOverhead) {
 		if(size > MAX_SAFE_MEM_SIZE || size < 1) throw new IllegalArgumentException("Invalid Safe Memory Size [" + size + "]", new Throwable());
 		ByteBuffer buff = onHeap ? ByteBuffer.allocate((int)size) : ByteBuffer.allocateDirect((int)size);
-		long address = getAddressOf(buff);
+		long address = UnsafeAdapter.getAddressOf(buff);
 		if(trackMem) {		
 			memoryAllocations.put(address, new long[]{size, alignmentOverhead});
 			totalMemoryAllocated.addAndGet(size);
