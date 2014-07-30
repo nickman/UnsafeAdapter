@@ -10,7 +10,7 @@ import java.util.Map;
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>com.heliosapm.unsafe.UnsafeAdapterOld.InactiveUnsafeMemory</code></p>
  */
-public class InactiveUnsafeMemory implements UnsafeMemoryMBean  {
+public class InactiveUnsafeMemory implements MemoryMBean  {
 
 	/**
 	 * Returns a map of unsafe memory stats keyed by the stat name
@@ -78,7 +78,7 @@ public class InactiveUnsafeMemory implements UnsafeMemoryMBean  {
 
 	/**
 	 * {@inheritDoc}
-	 * @see com.heliosapm.unsafe.UnsafeMemoryMBean#getAddressSize()
+	 * @see com.heliosapm.unsafe.MemoryMBean#getAddressSize()
 	 */
 	@Override
 	public int getAddressSize() {
@@ -87,11 +87,47 @@ public class InactiveUnsafeMemory implements UnsafeMemoryMBean  {
 
 	/**
 	 * {@inheritDoc}
-	 * @see com.heliosapm.unsafe.UnsafeMemoryMBean#getPageSize()
+	 * @see com.heliosapm.unsafe.MemoryMBean#getPageSize()
 	 */
 	@Override
 	public int getPageSize() {
 		return UnsafeAdapterOld.pageSize();
+	}
+
+	@Override
+	public boolean isSafeMemory() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean isTrackingEnabled() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean isFiveCopy() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean isFourSet() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean isAlignmentEnabled() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public long getReferenceQueueSize() {
+		// TODO Auto-generated method stub
+		return 0;
 	}
 	
 }

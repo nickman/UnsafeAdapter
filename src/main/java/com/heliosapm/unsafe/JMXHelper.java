@@ -22,43 +22,34 @@
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org. 
  *
  */
-package test.com.heliosapm.unsafe;
+package com.heliosapm.unsafe;
 
-import org.junit.Assert;
-import org.junit.Test;
-
-import com.heliosapm.unsafe.UnsafeAdapter;
-import com.heliosapm.unsafe.UnsafeAdapterOld;
+import javax.management.ObjectName;
 
 /**
- * <p>Title: BasicAllocationsTest</p>
- * <p>Description: Basic allocations test case</p> 
+ * <p>Title: JMXHelper</p>
+ * <p>Description: Static unchecked JMX utility methods</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
- * <p><code>test.com.heliosapm.unsafe.BasicAllocationsTest</code></p>
+ * <p><code>com.heliosapm.unsafe.JMXHelper</code></p>
  */
 
-public class BasicAllocationsTest extends BaseTest {
+public class JMXHelper {
 
+	/** The system property specifying the JMX domain of the MBeanServer to register mbeans with */
+	public static final String MBEANSERVER_PROP = "com.heliosapm.jmx.domain";
+	
 	/**
-	 * Tests a long allocation, write, read and deallocation
-	 * @throws Exception thrown on any error
+	 * Creates a new JMX ObjectName
+	 * @param name The stringy to build the ObjectName from
+	 * @return the new ObjectName
 	 */
-	@Test
-	public void testAllocatedLong() throws Exception {
-		final long address = UnsafeAdapter.allocateMemory(8);
+	public static ObjectName objectName(CharSequence name) {
 		try {
-			long value = nextPosLong();
-			UnsafeAdapter.putLong(address, value);
-			Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getLong(address));
-			Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getLong(address));	
-			value = nextPosLong();
-			UnsafeAdapter.putLongVolatile(address, value);
-			Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getLong(address));
-			Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getLong(address));				
-		} finally {
-			testUnsafe.freeMemory(address);
+			return new ObjectName(name.toString().trim());
+		} catch (Exception ex) {
+			throw new RuntimeException("Failed to create ObjectName for [" + name + "]", ex);
 		}
 	}
-	
+
 }

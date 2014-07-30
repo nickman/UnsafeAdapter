@@ -27,9 +27,12 @@ package com.heliosapm.unsafe;
 import java.lang.management.ManagementFactory;
 import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
@@ -45,7 +48,7 @@ import sun.misc.Unsafe;
  * <p><code>com.heliosapm.unsafe.DefaultUnsafeAdapterImpl</code></p>
  */
 @SuppressWarnings("restriction")
-public class DefaultUnsafeAdapterImpl implements Runnable {
+public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterImplMBean {
 	// =========================================================
 	//  Singleton
 	// =========================================================
@@ -81,7 +84,13 @@ public class DefaultUnsafeAdapterImpl implements Runnable {
     /** A map of memory allocation references keyed by an internal counter */
     protected static final NonBlockingHashMapLong<MemoryAllocationReference> deAllocs = new NonBlockingHashMapLong<MemoryAllocationReference>(1024, false);
 	/** Serial number factory for cleaner threads */
-	private static final AtomicLong cleanerSerial = new AtomicLong(0L); 
+	private static final AtomicLong cleanerSerial = new AtomicLong(0L);
+	
+	/** The field for accessing the pending queue length */
+	private static final Field queueLengthField;
+	/** The field for accessing the pending queue lock */
+	private static final Field queueLockField;
+
 
 	// =========================================================
 	//  Instance
@@ -92,13 +101,15 @@ public class DefaultUnsafeAdapterImpl implements Runnable {
 	/** The configured native memory alignment enablement  */
 	public final boolean alignMem;
 	/** The unsafe memory management MBean */
-	final UnsafeMemoryMBean unsafeMemoryStats = null;
+	final MemoryMBean unsafeMemoryStats = null;
 	/** A map of memory allocation sizes keyed by the address */
 	final NonBlockingHashMapLong<long[]> memoryAllocations;
 	/** The total native memory allocation */
 	final AtomicLong totalMemoryAllocated;
 	/** The total native memory allocation overhead for alignment */
 	final AtomicLong totalAlignmentOverhead;
+	/** The object to synchronize on for accessing the pending queue length */
+	private volatile Object queueLengthFieldLock;
 	
 	/** The reference queue where collected allocations go */
 	final ReferenceQueue<? super DeAllocateMe> refQueue;
@@ -111,7 +122,17 @@ public class DefaultUnsafeAdapterImpl implements Runnable {
 	public static final long MAX_ALIGNED_MEM_64 = 4611686018427387904L;
 	
 		
-
+	static {
+		try {
+			queueLengthField = ReferenceQueue.class.getDeclaredField("queueLength");
+			queueLengthField.setAccessible(true);
+			queueLockField = ReferenceQueue.class.getDeclaredField("lock");
+			queueLockField.setAccessible(true);
+			//queueLengthFieldLock =f.get(refQueue); 
+		} catch (Exception ex) {
+			throw new RuntimeException(ex);
+		}		
+	}
 
 	
 	/**
@@ -143,11 +164,13 @@ public class DefaultUnsafeAdapterImpl implements Runnable {
 		cleanerThread.setDaemon(true);
 		cleanerThread.setPriority(Thread.MAX_PRIORITY);
 		cleanerThread.start();
+		
 
 		// =========================================================
 		// Create the reference queue for collected deallocation refs
 		// =========================================================        
 		refQueue = new ReferenceQueue<DeAllocateMe>();
+		
 		// =========================================================
 		// Read the system props to get the configuration
 		// =========================================================        
@@ -193,10 +216,10 @@ public class DefaultUnsafeAdapterImpl implements Runnable {
 					ref.close();
 				}
 				if(terminating) {
-					if(getPending()==0) break;
+					if(getRefQueuePending()==0) break;
 				}
 			} catch (InterruptedException e) {
-				if(getPending()==0) break;
+				if(getRefQueuePending()==0) break;
 				terminating=true;
 			} catch (Exception e) {
 				loge("Unexpected exception [%s] in cleaner loop. Will Continue.", e);
@@ -209,8 +232,25 @@ public class DefaultUnsafeAdapterImpl implements Runnable {
 	 * Returns the number of pending references in the reference queue
 	 * @return the number of pending references
 	 */
-	public int getPending() {
-		return -1;
+	public long getRefQueuePending() {
+		if(queueLengthFieldLock==null) {
+			synchronized(refQueue) {
+				if(queueLengthFieldLock==null) {
+					try {
+						queueLengthFieldLock = queueLockField.get(refQueue);
+					} catch (Exception x) {
+						return -1L;
+					}					
+				}
+			}
+		}
+		try {
+			synchronized(queueLengthFieldLock) {
+				return queueLengthField.getInt(refQueue);
+			}
+		} catch (Exception x) {
+			return -1;
+		}
 	}
 	
 	/**
@@ -1095,6 +1135,176 @@ public class DefaultUnsafeAdapterImpl implements Runnable {
 			super.clear();
 		}
     }
+    
+	//===========================================================================================================
+	//	MemoryMBean Implementation
+	//===========================================================================================================	
+    
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#isSafeMemory()
+	 */
+	@Override
+	public boolean isSafeMemory() {
+		return UnsafeAdapter.isSafeAdapter();
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#isTrackingEnabled()
+	 */
+	@Override
+	public boolean isTrackingEnabled() {
+		return this.trackMem;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#isFiveCopy()
+	 */
+	@Override
+	public boolean isFiveCopy() {
+		return UnsafeAdapter.FIVE_COPY;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#isFourSet()
+	 */
+	@Override
+	public boolean isFourSet() {
+		return UnsafeAdapter.FOUR_SET;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#isAlignmentEnabled()
+	 */
+	@Override
+	public boolean isAlignmentEnabled() {
+		return this.alignMem;
+	}
+
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#getAddressSize()
+	 */
+	@Override
+	public int getAddressSize() {
+		return UnsafeAdapter.ADDRESS_SIZE;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#getPageSize()
+	 */
+	@Override
+	public int getPageSize() {
+		return UnsafeAdapter.pageSize();
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#getState()
+	 */
+	@Override
+	public Map<String, Long> getState() {
+		Map<String, Long> map = new HashMap<String, Long>(6);
+		map.put(ALLOC_MEM, getTotalAllocatedMemory());
+		map.put(ALLOC_OVER, getAlignedMemoryOverhead());
+		map.put(ALLOC_MEMK, getTotalAllocatedMemoryKb());
+		map.put(ALLOC_MEMM, getTotalAllocatedMemoryMb());
+		map.put(ALLOC_COUNT, (long)getTotalAllocationCount());
+		map.put(REFQ_SIZE, getRefQueuePending());    		
+		map.put(PENDING_COUNT, (long)getPendingRefs());
+		return map;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#getTotalAllocatedMemory()
+	 */
+	@Override
+	public long getTotalAllocatedMemory() {
+		return trackMem ? totalMemoryAllocated.get() : -1L;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#getAlignedMemoryOverhead()
+	 */
+	@Override
+	public long getAlignedMemoryOverhead() {
+		return alignMem ? totalAlignmentOverhead.get() : -1L;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#getTotalAllocatedMemoryKb()
+	 */
+	@Override
+	public long getTotalAllocatedMemoryKb() {
+		if(trackMem) {
+			long mem = totalMemoryAllocated.get();
+			return mem < 1 ? 0L : roundMem(mem, 1024);
+		}
+		return -1L;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#getTotalAllocatedMemoryMb()
+	 */
+	@Override
+	public long getTotalAllocatedMemoryMb() {
+		if(trackMem) {
+			long mem = totalMemoryAllocated.get();
+			return mem < 1 ? 0L : roundMem(mem, 1024*1024);
+		}
+		return -1L;
+	}
+	
+	/**
+	 * Rounds calculated memory sizes when converting from bytes to Kb and Mb.
+	 * @param total The total memory allocated in bytes
+	 * @param div The divisor
+	 * @return the rounded memory in Kb or Mb.
+	 */
+	private long roundMem(double total, double div) {
+		if(total<1) return 0L;
+		double d = total / div;
+		return Math.round(d);
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#getTotalAllocationCount()
+	 */
+	@Override
+	public int getTotalAllocationCount() {
+		if(!trackMem) return -1;
+		return memoryAllocations.size();
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#getPendingRefs()
+	 */
+	@Override
+	public int getPendingRefs() {
+		return deAllocs.size();
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#getReferenceQueueSize()
+	 */
+	@Override
+	public long getReferenceQueueSize() {		
+		return getRefQueuePending();
+	}
 	
     	
 }

@@ -28,6 +28,8 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.security.ProtectionDomain;
 
+import javax.management.ObjectName;
+
 import sun.misc.Unsafe;
 
 /**
@@ -57,8 +59,12 @@ public class UnsafeAdapter {
     /** Object array offset */
     public static final long OBJECTS_OFFSET;
     
-	
-	
+	/** The JMX ObjectName for the unsafe memory allocation JMX management interface MBean */
+	public static final ObjectName UNSAFE_MEM_OBJECT_NAME = JMXHelper.objectName("com.heliosapm.unsafe:service=MemoryAllocationService,type=unsafe");
+	/** The JMX ObjectName for the safe memory allocation JMX management interface MBean */
+	public static final ObjectName SAFE_MEM_OBJECT_NAME = JMXHelper.objectName("com.heliosapm.unsafe:service=MemoryAllocationService,type=safe");
+	/** The JMX ObjectName for the currently enabled memory allocation JMX management interface MBean */
+	public static final ObjectName MEM_OBJECT_NAME = JMXHelper.objectName("com.heliosapm.unsafe:service=MemoryAllocationService");
 
 	/** The configured adapter (default or safe) */
 	private static final DefaultUnsafeAdapterImpl adapter;
@@ -100,6 +106,21 @@ public class UnsafeAdapter {
 	}
 	
 	// =====================================================================================================
+	// Configuration reads
+	// =====================================================================================================
+	
+	
+	/**
+	 * Indicates if the SafeMemoryAllocator adapter is installed
+	 * @return true if the SafeMemoryAllocator adapter is installed, false otherwise
+	 */
+	public static final boolean isSafeAdapter() {
+		return (adapter.getClass().equals(SafeMemoryAllocator.class));
+	}
+	
+	
+	
+	// =====================================================================================================
 	// Direct calls to theUNSAFE
 	// =====================================================================================================
 	
@@ -118,6 +139,8 @@ public class UnsafeAdapter {
 	//	Sizing Operations Operations
 	// =======================================================================================================================
 	
+    
+    
 	/**
 	 * Report the offset of the first element in the storage allocation of a
 	 * given array class.  If #arrayIndexScale  returns a non-zero value

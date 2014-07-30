@@ -32,7 +32,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.heliosapm.unsafe.UnsafeAdapterOld;
-import com.heliosapm.unsafe.UnsafeMemoryMBean;
+import com.heliosapm.unsafe.MemoryMBean;
 
 /**
  * <p>Title: ManagedAllocationsTest</p>
@@ -44,7 +44,7 @@ import com.heliosapm.unsafe.UnsafeMemoryMBean;
 
 public class ManagedAllocationsTest extends BaseTest {
 	/** A proxy to the unsafe memory stats */
-	protected static UnsafeMemoryMBean unsafeMemory = null;
+	protected static MemoryMBean unsafeMemory = null;
 	/**
 	 * Tests the assumption that 
 	 * @throws Exception Thrown on any error
@@ -52,8 +52,8 @@ public class ManagedAllocationsTest extends BaseTest {
 	@BeforeClass
 	public static void testIfManaged() throws Exception {
 		testManaged();
-		unsafeMemory = MBeanServerInvocationHandler.newProxyInstance(PLATFORM_AGENT, UnsafeAdapterOld.UNSAFE_OBJECT_NAME, UnsafeMemoryMBean.class, false);
-		log("Acquired UnsafeMemoryMBean");
+		unsafeMemory = MBeanServerInvocationHandler.newProxyInstance(PLATFORM_AGENT, UnsafeAdapterOld.UNSAFE_OBJECT_NAME, MemoryMBean.class, false);
+		log("Acquired MemoryMBean");
 	}
 	
 	private static void testManaged() throws Exception {

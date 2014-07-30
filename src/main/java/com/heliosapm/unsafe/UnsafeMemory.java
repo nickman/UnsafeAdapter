@@ -10,7 +10,7 @@ import java.util.Map;
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>com.heliosapm.unsafe.UnsafeAdapterOld.UnsafeMemory</code></p>
  */
-public class UnsafeMemory implements UnsafeMemoryMBean  {
+public class UnsafeMemory implements MemoryMBean  {
 	
 	/** The map key for the total memory allocation in bytes */
 	public static final String ALLOC_MEM = "Memory";
@@ -30,7 +30,7 @@ public class UnsafeMemory implements UnsafeMemoryMBean  {
 	
 	/**
 	 * {@inheritDoc}
-	 * @see com.heliosapm.unsafe.UnsafeMemoryMBean#getState()
+	 * @see com.heliosapm.unsafe.MemoryMBean#getState()
 	 */
 	@Override
 	public Map<String, Long> getState() {
@@ -46,7 +46,7 @@ public class UnsafeMemory implements UnsafeMemoryMBean  {
 	
 	/**
 	 * {@inheritDoc}
-	 * @see com.heliosapm.unsafe.UnsafeMemoryMBean#getAddressSize()
+	 * @see com.heliosapm.unsafe.MemoryMBean#getAddressSize()
 	 */
 	@Override
 	public int getAddressSize() {
@@ -55,7 +55,7 @@ public class UnsafeMemory implements UnsafeMemoryMBean  {
 
 	/**
 	 * {@inheritDoc}
-	 * @see com.heliosapm.unsafe.UnsafeMemoryMBean#getPageSize()
+	 * @see com.heliosapm.unsafe.MemoryMBean#getPageSize()
 	 */
 	@Override
 	public int getPageSize() {
@@ -66,7 +66,7 @@ public class UnsafeMemory implements UnsafeMemoryMBean  {
 
 	/**
 	 * {@inheritDoc}
-	 * @see com.heliosapm.unsafe.UnsafeMemoryMBean#getTotalAllocatedMemory()
+	 * @see com.heliosapm.unsafe.MemoryMBean#getTotalAllocatedMemory()
 	 */
 	@Override
 	public long getTotalAllocatedMemory() {
@@ -76,7 +76,7 @@ public class UnsafeMemory implements UnsafeMemoryMBean  {
 	
 	/**
 	 * {@inheritDoc}
-	 * @see com.heliosapm.unsafe.UnsafeMemoryMBean#getAlignedMemoryOverhead()
+	 * @see com.heliosapm.unsafe.MemoryMBean#getAlignedMemoryOverhead()
 	 */
 	public long getAlignedMemoryOverhead() {
 		if(!UnsafeAdapterOld.trackMem) return -1L;
@@ -85,7 +85,7 @@ public class UnsafeMemory implements UnsafeMemoryMBean  {
 
 	/**
 	 * {@inheritDoc}
-	 * @see com.heliosapm.unsafe.UnsafeMemoryMBean#getTotalAllocationCount()
+	 * @see com.heliosapm.unsafe.MemoryMBean#getTotalAllocationCount()
 	 */
 	@Override
 	public int getTotalAllocationCount() {
@@ -95,7 +95,7 @@ public class UnsafeMemory implements UnsafeMemoryMBean  {
 
 	/**
 	 * {@inheritDoc}
-	 * @see com.heliosapm.unsafe.UnsafeMemoryMBean#getTotalAllocatedMemoryKb()
+	 * @see com.heliosapm.unsafe.MemoryMBean#getTotalAllocatedMemoryKb()
 	 */
 	@Override
 	public long getTotalAllocatedMemoryKb() {
@@ -107,7 +107,7 @@ public class UnsafeMemory implements UnsafeMemoryMBean  {
 
 	/**
 	 * {@inheritDoc}
-	 * @see com.heliosapm.unsafe.UnsafeMemoryMBean#getTotalAllocatedMemoryMb()
+	 * @see com.heliosapm.unsafe.MemoryMBean#getTotalAllocatedMemoryMb()
 	 */
 	@Override
 	public long getTotalAllocatedMemoryMb() {
@@ -123,6 +123,42 @@ public class UnsafeMemory implements UnsafeMemoryMBean  {
 	 */
 	public int getPendingRefs() {
 		return UnsafeAdapterOld.deAllocs.size();
+	}
+
+	@Override
+	public boolean isSafeMemory() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean isTrackingEnabled() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean isFiveCopy() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean isFourSet() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean isAlignmentEnabled() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public long getReferenceQueueSize() {
+		// TODO Auto-generated method stub
+		return 0;
 	}
 	
 	

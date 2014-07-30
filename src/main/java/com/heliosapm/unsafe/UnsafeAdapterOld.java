@@ -101,7 +101,7 @@ public class UnsafeAdapterOld {
 	/** The configured native memory alignment enablement  */
 	public static final boolean alignMem;
 	/** The unsafe memory management MBean */
-	public static final UnsafeMemoryMBean unsafeMemoryStats;
+	public static final MemoryMBean unsafeMemoryStats;
 	
 	/** A map of memory allocation sizes keyed by the address */
 	static final NonBlockingHashMapLong<long[]> memoryAllocations;

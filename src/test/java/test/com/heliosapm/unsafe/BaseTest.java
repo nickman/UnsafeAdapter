@@ -192,6 +192,13 @@ public class BaseTest {
 		log("\n\t==================================\n\tRunning Test [" + name.getMethodName() + "]\n\t==================================\n");
 	}
 	
+	/**
+	 * Prints the test name that just completed
+	 */
+	@After
+	public void printTestedName() {
+		log("\n\t==================================\n\tCompleted Test [" + name.getMethodName() + "]\n\t==================================\n");
+	}
 	
 	/**
 	 * Nothing yet
