@@ -24,6 +24,10 @@
  */
 package com.heliosapm.unsafe;
 
+import java.lang.management.ManagementFactory;
+
+import javax.management.MBeanServer;
+import javax.management.MBeanServerFactory;
 import javax.management.ObjectName;
 
 /**
@@ -39,6 +43,38 @@ public class JMXHelper {
 	/** The system property specifying the JMX domain of the MBeanServer to register mbeans with */
 	public static final String MBEANSERVER_PROP = "com.heliosapm.jmx.domain";
 	
+	/** The configured or default JMX domain of the default MBeanServer */
+	public static final String JMX_DOMAIN = System.getProperty(MBEANSERVER_PROP, "DefaultDomain").trim();
+	
+	private static volatile MBeanServer DEFAULT_MBEANSERVER = null;
+	private static final Object mBeanServerLock = new Object();
+	
+	/**
+	 * Returns the default MBeanServer. If the configured one cannot be found, returns the platform MBeanServer
+	 * @return the default MBeanServer
+	 */
+	public static MBeanServer getDefaultMBeanServer() {
+		if(DEFAULT_MBEANSERVER==null) {
+			synchronized(mBeanServerLock) {
+				if(DEFAULT_MBEANSERVER==null) {
+					if(JMX_DOMAIN.equals("DefaultDomain")) {
+						DEFAULT_MBEANSERVER = ManagementFactory.getPlatformMBeanServer();
+						return DEFAULT_MBEANSERVER;
+					}
+					for(MBeanServer server: MBeanServerFactory.findMBeanServer(null)) {
+						String domain = server.getDefaultDomain();
+						if(JMX_DOMAIN.equals(domain)) {
+							DEFAULT_MBEANSERVER = server;
+							return DEFAULT_MBEANSERVER;
+						}
+					}
+					return ManagementFactory.getPlatformMBeanServer();
+				}
+			}
+		}
+		return DEFAULT_MBEANSERVER==null ? ManagementFactory.getPlatformMBeanServer() : DEFAULT_MBEANSERVER; 
+	}
+	
 	/**
 	 * Creates a new JMX ObjectName
 	 * @param name The stringy to build the ObjectName from
@@ -51,5 +87,53 @@ public class JMXHelper {
 			throw new RuntimeException("Failed to create ObjectName for [" + name + "]", ex);
 		}
 	}
+	
+	/**
+	 * Registers the passed object MBean in the default MBeanServer under the passed ObjectName
+	 * @param mbean The object to register
+	 * @param objectName The ObjectName to register under
+	 */
+	public static void registerMBean(Object mbean, ObjectName objectName) {
+		try {
+			getDefaultMBeanServer().registerMBean(mbean, objectName);
+		} catch (Exception ex) {
+			throw new RuntimeException("Failed to to register MBean for ObjectName [" + objectName + "]", ex);
+		}
+	}
+	
+	/**
+	 * Attempts to unregister the MBean registered in the default MBeanServer under the passed ObjectName
+	 * @param objectName the ObjectName of the MBean to unregister
+	 */
+	public static void unregisterMBean(ObjectName objectName) {
+		try {
+			getDefaultMBeanServer().unregisterMBean(objectName);
+		} catch (Exception ex) {
+			/* No Op */
+		}		
+	}
+	
+	/**
+	 * Forces registration of the passed object MBean in the default MBeanServer under the passed ObjectName.
+	 * If an MBean is already registered, it is removed
+	 * @param mbean The object to register
+	 * @param objectName The ObjectName to register under
+	 */
+	public static void forceRegisterMBean(Object mbean, ObjectName objectName) {
+		final MBeanServer server = getDefaultMBeanServer();
+		try {
+			if(server.isRegistered(objectName)) {
+				server.unregisterMBean(objectName);
+			}
+		} catch (Exception ex) {
+			/* No Op */
+		}		
+		try {
+			server.registerMBean(mbean, objectName);
+		} catch (Exception ex) {
+			throw new RuntimeException("Failed to to force register MBean for ObjectName [" + objectName + "]", ex);
+		}
+	}
+	
 
 }

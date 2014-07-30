@@ -151,6 +151,21 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	}
 
 	
+	/**
+	 * <b>TEST HOOK ONLY !</b>
+	 * Don't use this unless you know what you're doing.
+	 */
+	@SuppressWarnings("unused")
+	private final void reset() {
+		log("***********  Resetting  ***********");
+		JMXHelper.unregisterMBean(UnsafeAdapter.UNSAFE_MEM_OBJECT_NAME);
+		try {
+			Field instanceField = ReflectionHelper.setFieldEditable(getClass(), "instance");
+			instanceField.set(null, null);
+		} catch (Throwable t) {
+			loge("Failed to reset UnsafeAdapter", t);
+		}
+	}
 
 	
 	/**
@@ -194,8 +209,20 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
     		totalMemoryAllocated = null;
     		totalAlignmentOverhead = null;    		    		
     	}    	
+    	registerJmx();
 	}
 
+	/**
+	 * Registers the Unsafe Memory Allocator's JMX MBean
+	 */
+	protected void registerJmx() {
+		try {
+			JMXHelper.registerMBean(this, UnsafeAdapter.UNSAFE_MEM_OBJECT_NAME);
+		} catch (Exception ex) {
+			loge("Failed to register JMX MemoryMBean", ex);
+		}
+	}
+	
 //	Memory : 136
 //	Allocations : 2
 //	Pending : 2

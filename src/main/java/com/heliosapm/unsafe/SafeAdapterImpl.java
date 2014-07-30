@@ -24,6 +24,7 @@
  */
 package com.heliosapm.unsafe;
 
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 
 import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
@@ -38,6 +39,17 @@ import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
  */
 
 public class SafeAdapterImpl extends DefaultUnsafeAdapterImpl {
+	
+	
+	// =========================================================
+	//  Singleton
+	// =========================================================
+	/** The singleton instance */
+	private static volatile SafeAdapterImpl instance = null;
+	/** The singleton instance ctor lock */
+	private static final Object lock = new Object();
+	
+	
 	/** The system prop indicating if safe allocations should be on heap */
 	public static final String SAFE_ALLOCS_ONHEAP_PROP = "safe.allocations.onheap";	
 	/** The maximum safe memory allocation */
@@ -51,9 +63,21 @@ public class SafeAdapterImpl extends DefaultUnsafeAdapterImpl {
 	/** The safe memory allocator */
 	final SafeMemoryAllocator allocator;
 
-	static {
-		
+	/**
+	 * Acquires the singleton SafeAdapterImpl and initializes it on first access.
+	 * @return the singleton SafeAdapterImpl
+	 */
+	public static SafeAdapterImpl getInstance() {
+		if(instance==null) {
+			synchronized(lock) {
+				if(instance==null) {
+					instance = new SafeAdapterImpl(); 
+				}
+			}
+		}
+		return instance;
 	}
+
 	
 	/**
 	 * Creates a new SafeAdapterImpl
@@ -66,15 +90,35 @@ public class SafeAdapterImpl extends DefaultUnsafeAdapterImpl {
 		} else {
 			safeMemoryAllocations = null;
 		}
-		allocator = SafeMemoryAllocator.getInstance();
+		allocator = SafeMemoryAllocator.getInstance();				
 	}
 	
 	/**
-	 * Terminates this adapter.
-	 * <b>TEST HOOK ONLY!</b>. Not intended for regular use.
+	 * Registers the Safe Memory Allocator's JMX MBean
 	 */
-	void shutdown() {
-		
+	protected void registerJmx() {
+		try {
+			JMXHelper.registerMBean(this, UnsafeAdapter.SAFE_MEM_OBJECT_NAME);
+		} catch (Exception ex) {
+			loge("Failed to register JMX MemoryMBean", ex);
+		}
+	}
+	
+	
+	/**
+	 * <b>TEST HOOK ONLY !</b>
+	 * Don't use this unless you know what you're doing.
+	 */
+	@SuppressWarnings("unused")
+	private final void reset() {
+		log("***********  Resetting  ***********");
+		JMXHelper.unregisterMBean(UnsafeAdapter.SAFE_MEM_OBJECT_NAME);
+		try {
+			Field instanceField = ReflectionHelper.setFieldEditable(getClass(), "instance");
+			instanceField.set(null, null);
+		} catch (Throwable t) {
+			loge("Failed to reset SafeAdapter", t);
+		}
 	}
 	
 	

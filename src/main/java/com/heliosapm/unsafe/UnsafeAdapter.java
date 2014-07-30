@@ -100,9 +100,31 @@ public class UnsafeAdapter {
 		// =========================================================        
         ADDRESS_SIZE = theUNSAFE.addressSize();
         BYTES_OFFSET = theUNSAFE.arrayBaseOffset(byte[].class);
-        OBJECTS_OFFSET = theUNSAFE.arrayBaseOffset(Object[].class);        
-		
-		adapter = System.getProperties().containsKey(SAFE_MANAGER_PROP) ? SafeAdapterImpl.getInstance() : DefaultUnsafeAdapterImpl.getInstance();
+        OBJECTS_OFFSET = theUNSAFE.arrayBaseOffset(Object[].class);
+        adapter = getAdapter();
+	}
+	
+	private static final DefaultUnsafeAdapterImpl getAdapter() {
+		return System.getProperties().containsKey(SAFE_MANAGER_PROP) ? 
+				SafeAdapterImpl.getInstance() : 
+					DefaultUnsafeAdapterImpl.getInstance();
+	}
+	
+	/**
+	 * <b>TEST HOOK ONLY !</b>
+	 * Don't use this unless you know what you're doing.
+	 */
+	@SuppressWarnings("unused")
+	private static final void reset() {
+		try {
+			Field adapterField = ReflectionHelper.setFieldEditable(UnsafeAdapter.class, "adapter");
+			if(adapter!=null) ReflectionHelper.invoke(adapter, "reset");
+			adapterField.set(null, getAdapter());
+		} catch (Throwable t) {
+			loge("Failed to reset UnsafeAdapter", t);
+		} finally {
+			ReflectionHelper.setFieldReadOnly(UnsafeAdapter.class, "adapter");
+		}
 	}
 	
 	// =====================================================================================================
@@ -115,9 +137,16 @@ public class UnsafeAdapter {
 	 * @return true if the SafeMemoryAllocator adapter is installed, false otherwise
 	 */
 	public static final boolean isSafeAdapter() {
-		return (adapter.getClass().equals(SafeMemoryAllocator.class));
+		return (adapter.getClass().equals(SafeAdapterImpl.class));
 	}
 	
+	/**
+	 * Returns the MemoryMBean for the currently installed adapter
+	 * @return the MemoryMBean for the currently installed adapter
+	 */
+	public static MemoryMBean getMemoryMBean() {
+		return adapter;
+	}
 	
 	
 	// =====================================================================================================

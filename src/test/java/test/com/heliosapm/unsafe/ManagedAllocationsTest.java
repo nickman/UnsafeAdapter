@@ -24,15 +24,13 @@
  */
 package test.com.heliosapm.unsafe;
 
-import static org.junit.Assume.assumeTrue;
-
-import javax.management.MBeanServerInvocationHandler;
-
+import org.junit.Assert;
 import org.junit.BeforeClass;
-import org.junit.Test;
 
-import com.heliosapm.unsafe.UnsafeAdapterOld;
-import com.heliosapm.unsafe.MemoryMBean;
+import com.heliosapm.unsafe.JMXHelper;
+import com.heliosapm.unsafe.ReflectionHelper;
+import com.heliosapm.unsafe.UnsafeAdapter;
+
 
 /**
  * <p>Title: ManagedAllocationsTest</p>
@@ -42,31 +40,21 @@ import com.heliosapm.unsafe.MemoryMBean;
  * <p><code>test.com.heliosapm.unsafe.ManagedAllocationsTest</code></p>
  */
 
-public class ManagedAllocationsTest extends BaseTest {
-	/** A proxy to the unsafe memory stats */
-	protected static MemoryMBean unsafeMemory = null;
+public class ManagedAllocationsTest extends BasicAllocationsTest {
+	
 	/**
-	 * Tests the assumption that 
-	 * @throws Exception Thrown on any error
+	 * Sets the baseline state (unsafe) of the adapter and enabled memory tracking for this test
 	 */
 	@BeforeClass
-	public static void testIfManaged() throws Exception {
-		testManaged();
-		unsafeMemory = MBeanServerInvocationHandler.newProxyInstance(PLATFORM_AGENT, UnsafeAdapterOld.UNSAFE_OBJECT_NAME, MemoryMBean.class, false);
-		log("Acquired MemoryMBean");
+	public static void baselineState() {		
+		System.clearProperty(UnsafeAdapter.SAFE_MANAGER_PROP);
+		System.setProperty("unsafe.allocations.track", "true");
+		ReflectionHelper.invoke(UnsafeAdapter.class, "reset");
+		Assert.assertEquals("UnsafeAdapter is not in managed memory-tracking mode", true, UnsafeAdapter.getMemoryMBean().isTrackingEnabled());
+		Assert.assertFalse("Adapter was not set to unsafe", UnsafeAdapter.isSafeAdapter());		
+		Assert.assertTrue("Unsafe Adapter MBean Was Not Registered", JMXHelper.getDefaultMBeanServer().isRegistered(UnsafeAdapter.UNSAFE_MEM_OBJECT_NAME));
+		Assert.assertFalse("Safe Adapter MBean Was Registered", JMXHelper.getDefaultMBeanServer().isRegistered(UnsafeAdapter.SAFE_MEM_OBJECT_NAME));
 	}
-	
-	private static void testManaged() throws Exception {
-		assumeTrue("", PLATFORM_AGENT.isRegistered(UnsafeAdapterOld.UNSAFE_OBJECT_NAME));
-	}
-	
-	/**
-	 * Validates that the baseline memory is correctly set
-	 */
-	@Test
-	public void testBaseline() {
-		log("Baselines:  Allocs:%s,  Mem:%s", UnsafeAdapterOld.BASELINE_ALLOCS, UnsafeAdapterOld.BASELINE_MEM);
-	}
-	
+
 	
 }

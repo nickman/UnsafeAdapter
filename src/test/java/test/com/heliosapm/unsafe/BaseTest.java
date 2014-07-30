@@ -29,6 +29,7 @@ import java.io.File;
 import java.io.PrintStream;
 import java.lang.management.ManagementFactory;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -52,6 +53,10 @@ import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.TestName;
+
+import com.heliosapm.unsafe.DefaultUnsafeAdapterImpl;
+import com.heliosapm.unsafe.SafeMemoryAllocator;
+import com.heliosapm.unsafe.UnsafeAdapter;
 
 import sun.misc.Unsafe;
 
@@ -287,6 +292,10 @@ public class BaseTest {
 	
 	/** A serial number factory for stream threads */
 	public static final AtomicLong streamThreadSerial = new AtomicLong();
+	
+	
+	
+
 
 	
 }
