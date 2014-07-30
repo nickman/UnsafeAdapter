@@ -24,6 +24,7 @@
  */
 package com.heliosapm.unsafe;
 
+import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Field;
@@ -35,6 +36,10 @@ import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+
+import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
+
+import com.heliosapm.unsafe.DefaultUnsafeAdapterImpl.MemoryAllocationReference;
 
 import sun.misc.Cleaner;
 import sun.nio.ch.DirectBuffer;
@@ -55,15 +60,38 @@ public class SafeMemoryAllocator implements Runnable {
 	/** The singleton instance ctor lock */
 	private static final Object lock = new Object();
 	/** Serial number factory for cleaner threads */
-	private static final AtomicLong cleanerSerial = new AtomicLong(0L); 
+	private static final AtomicLong cleanerSerial = new AtomicLong(0L);
 	
+    /** A map of memory allocation references keyed by an internal counter */
+    protected final NonBlockingHashMapLong<MemoryAllocationReference> deAllocs = new NonBlockingHashMapLong<MemoryAllocationReference>(1024, false);
+
+    /** Serial number factory for memory allocationreferences */
+    private static final AtomicLong refIndexFactory = new AtomicLong(0L);
+    /** Empty long[] array const */
+    private static final long[][] EMPTY_ADDRESSES = {{}};
+    
+
 	
 	
 	/** The field for accessing the pending queue length */
 	private final Field queueLengthField;
 	/** The object to synchronize on for accessing the pending queue length */
 	private final Object queueLengthFieldLock;
-	
+	/** The configured native memory alignment enablement  */
+	public final boolean alignMem;
+	/** A map of allocation weak references */ 
+	final Map<Range, SafeMemoryAllocationWeakReference> allocations;
+	/** A weak ref key map of safe allocations keyed by the deallocation long array */
+	final Map<LongArrayMapKey, Map<Long, SafeMemoryAllocation>> allocationByLongArr = 
+				Collections.synchronizedMap(new WeakHashMap<LongArrayMapKey, Map<Long, SafeMemoryAllocation>>(1024));
+	/** The reference queue where collected allocations go */
+	final ReferenceQueue<? super SafeMemoryAllocation> refQueue;
+	/** The reference cleaner thread */
+	Thread cleanerThread;
+	/** The total memory allocated */
+	final AtomicLong totalMemory = new AtomicLong(0L);
+	/** The total alignment overhead */
+	final AtomicLong totalAlignmentOverhead = new AtomicLong(0L);
 	
 	/**
 	 * Acquires the singleton SafeMemoryAllocator and initializes it on first access.
@@ -79,23 +107,6 @@ public class SafeMemoryAllocator implements Runnable {
 		}
 		return instance;
 	}
-	
-	/** A map of allocation weak references */ 
-	final Map<Range, SafeMemoryAllocationWeakReference> allocations;
-	/** A weak ref key map of safe allocations keyed by the deallocation long array */
-	final Map<LongArrayMapKey, Map<Long, SafeMemoryAllocation>> allocationByLongArr = 
-				Collections.synchronizedMap(new WeakHashMap<LongArrayMapKey, Map<Long, SafeMemoryAllocation>>(1024));
-	/** The reference queue where collected allocations go */
-	final ReferenceQueue<? super SafeMemoryAllocation> refQueue;
-	/** The reference cleaner thread */
-	Thread cleanerThread;
-	/** The total memory allocated */
-	final AtomicLong totalMemory = new AtomicLong(0L);
-	
-//	BaselineMemory : 136
-//	BaselineAllocations : 2
-//	BaselinePending : 2
-//	BaselineOverhead : 52
 
 	
 	
@@ -107,6 +118,7 @@ public class SafeMemoryAllocator implements Runnable {
 		allocations = new ConcurrentHashMap<Range, SafeMemoryAllocationWeakReference>();
 		refQueue = new ReferenceQueue<SafeMemoryAllocation>();
 		cleanerThread = new Thread(this, "SafeMemoryAllocationCleaner#" + cleanerSerial.incrementAndGet());
+		alignMem = System.getProperties().containsKey(UnsafeAdapter.ALIGN_ALLOCS_PROP);
 		try {
 			queueLengthField = ReferenceQueue.class.getDeclaredField("queueLength");
 			queueLengthField.setAccessible(true);
@@ -120,6 +132,8 @@ public class SafeMemoryAllocator implements Runnable {
 		cleanerThread.setPriority(Thread.MAX_PRIORITY);
 		cleanerThread.start();
 	}
+	
+	
 	
 	/**
 	 * Returns the total number of allocated bytes
@@ -141,7 +155,7 @@ public class SafeMemoryAllocator implements Runnable {
 	 * Returns the number of pending references in the reference queue
 	 * @return the number of pending references in the reference queue
 	 */
-	int getPending() {
+	int getRefQueuePending() {
 		try {
 			synchronized(queueLengthFieldLock) {
 				return queueLengthField.getInt(refQueue);
@@ -149,6 +163,10 @@ public class SafeMemoryAllocator implements Runnable {
 		} catch (Exception x) {
 			return -1;
 		}
+	}
+	
+	int getPending() {
+		return 
 	}
 	
 	/**
@@ -192,6 +210,22 @@ public class SafeMemoryAllocator implements Runnable {
 		totalMemory.addAndGet(size);
 		return sma.startRange;
 	}
+	
+	/**
+	 * Allocates a new safe memory block, cache-line aligned for consistency if alignment is enabled
+	 * @param size The size of the memory block in bytes
+	 * @param onHeap true for heap memory, false for direct memory
+	 * @return the notional address of the block
+	 */
+	public long allocateAligned(long size, boolean onHeap) {
+		final long alignedSize = DefaultUnsafeAdapterImpl.findNextPositivePowerOfTwo(size);
+		SafeMemoryAllocation sma = new SafeMemoryAllocation(size, onHeap);
+		allocations.put(sma.range, new SafeMemoryAllocationWeakReference(sma));
+		totalMemory.addAndGet(size);
+		totalAlignmentOverhead.addAndGet(alignedSize-size);
+		return sma.startRange;
+	}
+	
 	
 	/**
 	 * Locates and returns the safe memory allocation at or containing the passed address
@@ -268,17 +302,53 @@ public class SafeMemoryAllocator implements Runnable {
 		System.out.println(msg);
 	}
 	
+    class MemoryAllocationReference extends WeakReference<DeAllocateMe> {
+    	/** The index of this reference */
+    	private final long index = refIndexFactory.incrementAndGet();
+    	/** The memory addresses owned by this reference */
+    	private final long[][] addresses;
+    	
+		/**
+		 * Creates a new MemoryAllocationReference
+		 * @param referent the memory address holder
+		 */
+		public MemoryAllocationReference(final DeAllocateMe referent) {
+			super(referent, refQueue);
+			addresses = referent==null ? EMPTY_ADDRESSES : referent.getAddresses();
+			deAllocs.put(index, this);
+		}    	
+		
+		/**
+		 * Deallocates the referenced memory blocks 
+		 */
+		public void close() {
+			for(long[] address: addresses) {
+				if(address[0]>0) {
+					freeMemory(address[0]);
+					address[0] = 0L;
+				}
+				deAllocs.remove(index);
+			}
+			super.clear();
+		}
+    }
+
+	
 	class SafeMemoryAllocationWeakReference extends WeakReference<SafeMemoryAllocation> {
 		final long size;
+		final long alignmentOverhead;
 		final Range range;
+		
 		public SafeMemoryAllocationWeakReference(SafeMemoryAllocation allocation) {
 			super(allocation, refQueue);
-			size = allocation.size * -1;
+			size = allocation.size * -1L;
+			alignmentOverhead = allocation.alignmentOverhead * -1L;
 			range = allocation.range;
 		}		
 		public void close() { 
 			allocations.remove(range);
 			totalMemory.addAndGet(size);
+			totalAlignmentOverhead.addAndGet(alignmentOverhead);
 		}
 	}
 	
@@ -465,6 +535,8 @@ public class SafeMemoryAllocator implements Runnable {
 		final ByteBuffer block;
 		/** The size of the block */
 		final long size;
+		/** The alignment overhead */
+		final long alignmentOverhead;		
 		/** The notional address of the memory block */
 		final long startRange;
 		/** The notional end address of the memory block */
@@ -477,16 +549,28 @@ public class SafeMemoryAllocator implements Runnable {
 		/**
 		 * Creates a new SafeMemoryAllocation
 		 * @param size The size of the allocation in bytes
+		 * @param alignmentOverhead The size of the alignment overhead
 		 * @param onHeap true for on heap memory, false for direct
 		 */
-		SafeMemoryAllocation(long size, boolean onHeap) {
+		SafeMemoryAllocation(long size, long alignmentOverhead, boolean onHeap) {
 			if(size > Integer.MAX_VALUE || size < 1) throw new IllegalArgumentException("Invalid Safe Memory Size [" + size + "]", new Throwable());
 			this.size = size;
+			this.alignmentOverhead = alignmentOverhead;
 			block = onHeap ? ByteBuffer.allocate((int)size) : ByteBuffer.allocateDirect((int)size);
 			startRange = UnsafeAdapter.getAddressOf(block);
 			endRange = startRange + size;
 			range = Range.range(startRange, endRange);
 		}
+		
+		/**
+		 * Creates a new SafeMemoryAllocation with zero allocation overhead
+		 * @param size The size of the allocation in bytes
+		 * @param onHeap true for on heap memory, false for direct
+		 */
+		SafeMemoryAllocation(long size, boolean onHeap) {
+			this(size, 0L, onHeap);
+		}
+		
 
 		/**
 		 * {@inheritDoc}
@@ -517,3 +601,174 @@ public class SafeMemoryAllocator implements Runnable {
 		
 	}
 }
+
+
+/*
+
+	//===========================================================================================================
+	//	Allocate Memory Ops
+	//===========================================================================================================	
+
+//	/**
+//	 * Allocates a new block of native memory, of the given size in bytes. 
+//	 * The contents of the memory are uninitialized; they will generally be garbage.
+//	 * The resulting native pointer will never be zero, and will be aligned for all value types.  
+//	 * Dispose of this memory by calling #freeMemory , or resize it with #reallocateMemory.
+//	 * @param size The size of the block of memory to allocate in bytes
+//	 * @return The address of the allocated memory block
+//	 * @see sun.misc.Unsafe#allocateMemory(long)
+//	 */
+//	public long allocateMemory(long size) {
+//		return _allocateMemory(size, 0L, null);
+//	}
+//	
+//	/**
+//	 * Allocates a chunk of memory and returns its address
+//	 * @param size The number of bytes to allocate
+//	 * @param dealloc The optional deallocatable to register for deallocation when it becomes phantom reachable
+//	 * @return The address of the allocated memory
+//	 * @see sun.misc.Unsafe#allocateMemory(long)
+//	 */
+//	public long allocateMemory(long size, DeAllocateMe dealloc) {
+//		return _allocateMemory(size, 0L, dealloc);
+//	}	
+//	
+//	
+//	/**
+//	 * Allocates a new block of cache-line aligned native memory, of the given size in bytes rounded up to the nearest power of 2. 
+//	 * The contents of the memory are uninitialized; they will generally be garbage.
+//	 * The resulting native pointer will never be zero, and will be aligned for all value types.  
+//	 * Dispose of this memory by calling #freeMemory , or resize it with #reallocateMemory.
+//	 * @param size The size of the block of memory to allocate in bytes
+//	 * @return The address of the allocated memory block
+//	 * @see sun.misc.Unsafe#allocateMemory(long)
+//	 */
+//	public long allocateAlignedMemory(long size) {
+//		return allocateAlignedMemory(size, null);
+//	}
+//	
+//	/**
+//	 * Allocates a new block of cache-line aligned native memory, of the given size in bytes rounded up to the nearest power of 2. 
+//	 * The contents of the memory are uninitialized; they will generally be garbage.
+//	 * The resulting native pointer will never be zero, and will be aligned for all value types.  
+//	 * Dispose of this memory by calling #freeMemory , or resize it with #reallocateMemory.
+//	 * @param size The size of the block of memory to allocate in bytes
+//	 * @param dealloc The optional deallocatable to register for deallocation when it becomes phantom reachable
+//	 * @return The address of the allocated memory block
+//	 * @see sun.misc.Unsafe#allocateMemory(long)
+//	 */
+//	public long allocateAlignedMemory(long size, DeAllocateMe dealloc) {
+//		if(alignMem) {
+//			long alignedSize = UnsafeAdapter.ADDRESS_SIZE==4 ? findNextPositivePowerOfTwo((int)size) : findNextPositivePowerOfTwo((int)size);
+//			return _allocateMemory(alignedSize, alignedSize-size, dealloc);
+//		}
+//		return _allocateMemory(size, 0L, dealloc);		
+//	}
+//	
+//    /**
+//     * Finds the next <b><code>power of 2</code></b> higher or equal to than the passed value.
+//     * @param value The initial value
+//     * @return the next pow2 without overrunning the type size
+//     */
+//    public static long findNextPositivePowerOfTwo(final long value) {
+//    	if(UnsafeAdapter.ADDRESS_SIZE==4) {
+//        	if(value > MAX_ALIGNED_MEM_32) return value;
+//        	return  1 << (32 - Integer.numberOfLeadingZeros((int)value - 1));    		
+//    	}
+//    	if(value > MAX_ALIGNED_MEM_64) return value;
+//    	return  1 << (64 - Long.numberOfLeadingZeros(value - 1));    		
+//	}    
+//    
+//
+//	/**
+//	 * Allocates a chunk of memory and returns its address
+//	 * @param size The number of bytes to allocate
+//	 * @param alignmentOverhead The number of bytes allocated in excess of requested for alignment
+//	 * @param deallocator The reference to the object which when collected will deallocate the referenced addresses
+//	 * @return The address of the allocated memory
+//	 * @see sun.misc.Unsafe#allocateMemory(long)
+//	 */
+//	@SuppressWarnings("unused")
+//	long _allocateMemory(long size, long alignmentOverhead, DeAllocateMe deallocator) {
+//		long address = UNSAFE.allocateMemory(size);
+//		if(trackMem) {		
+//			memoryAllocations.put(address, new long[]{size, alignmentOverhead});
+//			totalMemoryAllocated.addAndGet(size);
+//			totalAlignmentOverhead.addAndGet(alignmentOverhead);
+//		}
+//    	if(deallocator!=null) {
+//    		long[][] addresses = deallocator.getAddresses();
+//    		if(addresses==null || addresses.length==0) {
+//    			new MemoryAllocationReference(deallocator);
+//    		}
+//    	}		
+//		return address;
+//	}
+//	
+//	/**
+//	 * Resizes a new block of native memory, to the given size in bytes.
+//	 * <b>NOTE:</b>If the caller implements {@link DeAllocateMe} and expects the allocations
+//	 * to be automatically cleared, the returned value should overwrite the index of 
+//	 * the {@link DeAllocateMe}'s array where the previous address was.    
+//	 * @param address The address of the existing allocation
+//	 * @param size The size of the new allocation in bytes
+//	 * @return The address of the new allocation
+//	 * @see sun.misc.Unsafe#reallocateMemory(long, long)
+//	 */
+//	public long reallocateMemory(long address, long size) {
+//		return _reallocateMemory(address, size, 0);
+//	}	
+//	
+//	/**
+//	 * Resizes a new block of aligned (if enabled) native memory, to the given size in bytes.
+//	 * <b>NOTE:</b>If the caller implements {@link DeAllocateMe} and expects the allocations
+//	 * to be automatically cleared, the returned value should overwrite the index of 
+//	 * the {@link DeAllocateMe}'s array where the previous address was.   
+//	 * @param address The address of the existing allocation
+//	 * @param size The size of the new allocation in bytes
+//	 * @return The address of the new allocation
+//	 * @see sun.misc.Unsafe#reallocateMemory(long, long)
+//	 */
+//	public long reallocateAlignedMemory(long address, long size) {
+//		if(alignMem) {
+//			long actual = findNextPositivePowerOfTwo(size);
+//			return _reallocateMemory(address, actual, actual-size);
+//		} 
+//		return _reallocateMemory(address, size, 0);
+//	}	
+//	
+//	/**
+//	 * Resizes a new block of native memory, to the given size in bytes.
+//	 * <b>NOTE:</b>If the caller implements {@link DeAllocateMe} and expects the allocations
+//	 * to be automatically cleared, the returned value should overwrite the index of 
+//	 * the {@link DeAllocateMe}'s array where the previous address was.  
+//	 * @param address The address of the existing allocation
+//	 * @param size The size of the new allocation in bytes
+//	 * @param alignmentOverhead The established overhead of the alignment
+//	 * @return The address of the new allocation
+//	 * @see sun.misc.Unsafe#reallocateMemory(long, long)
+//	 */
+//	long _reallocateMemory(long address, long size, long alignmentOverhead) {
+//		long newAddress = UNSAFE.reallocateMemory(address, size);
+//		if(trackMem) {
+//			// ==========================================================
+//			//  Subtract pervious allocation
+//			// ==========================================================				
+//			long[] alloc = memoryAllocations.remove(address);
+//			if(alloc!=null) {
+//				totalMemoryAllocated.addAndGet(-1L * alloc[0]);
+//				totalAlignmentOverhead.addAndGet(-1L * alloc[1]);
+//			}
+//			// ==========================================================
+//			//  Add new allocation
+//			// ==========================================================								
+//			memoryAllocations.put(newAddress, new long[]{size, alignmentOverhead});
+//			totalMemoryAllocated.addAndGet(size);
+//			totalAlignmentOverhead.addAndGet(alignmentOverhead);
+//		}
+//		return newAddress;
+//	}
+//	
+
+
+*/

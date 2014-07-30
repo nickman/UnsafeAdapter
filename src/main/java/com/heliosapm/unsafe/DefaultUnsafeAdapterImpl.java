@@ -67,10 +67,6 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
     /** Indicates if the 4 param set memory is supported */
     public static final boolean FOUR_SET = UnsafeAdapter.FOUR_SET;	
 	
-	/** The system prop indicating that allocations should be tracked */
-	public static final String TRACK_ALLOCS_PROP = "unsafe.allocations.track";
-	/** The system prop indicating that allocations should be alligned */
-	public static final String ALIGN_ALLOCS_PROP = "unsafe.allocations.align";
 	/** The debug agent library signature */
 	public static final String AGENT_LIB = "-agentlib:";	
 	/** The legacy debug agent library signature */
@@ -79,8 +75,6 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
     private static final AtomicLong refIndexFactory = new AtomicLong(0L);
     /** Empty long[] array const */
     private static final long[][] EMPTY_ADDRESSES = {{}};
-    /** Empty MemoryAllocationReference list const */
-    private static final List<MemoryAllocationReference> EMPTY_ALLOC_LIST = Collections.unmodifiableList(new ArrayList<MemoryAllocationReference>(0));
     /** A map of memory allocation references keyed by an internal counter */
     protected static final NonBlockingHashMapLong<MemoryAllocationReference> deAllocs = new NonBlockingHashMapLong<MemoryAllocationReference>(1024, false);
 	/** Serial number factory for cleaner threads */
@@ -157,11 +151,13 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	 */
 	@SuppressWarnings("unused")
 	private final void reset() {
-		log("***********  Resetting  ***********");
-		JMXHelper.unregisterMBean(UnsafeAdapter.UNSAFE_MEM_OBJECT_NAME);
+		log("***********  Resetting  ***********");		
 		try {
-			Field instanceField = ReflectionHelper.setFieldEditable(getClass(), "instance");
-			instanceField.set(null, null);
+			synchronized(lock) {
+				JMXHelper.unregisterMBean(UnsafeAdapter.UNSAFE_MEM_OBJECT_NAME);
+				Field instanceField = ReflectionHelper.setFieldEditable(getClass(), "instance");
+				instanceField.set(null, null);
+			}
 		} catch (Throwable t) {
 			loge("Failed to reset UnsafeAdapter", t);
 		}
@@ -189,8 +185,8 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 		// =========================================================
 		// Read the system props to get the configuration
 		// =========================================================        
-    	trackMem = System.getProperties().containsKey(TRACK_ALLOCS_PROP) || isDebugAgentLoaded();   
-    	alignMem = System.getProperties().containsKey(ALIGN_ALLOCS_PROP);
+    	trackMem = System.getProperties().containsKey(UnsafeAdapter.TRACK_ALLOCS_PROP) || isDebugAgentLoaded();   
+    	alignMem = System.getProperties().containsKey(UnsafeAdapter.ALIGN_ALLOCS_PROP);
 		// =========================================================
 		// Initialize the memory allocation tracking if enabled.
     	// Otherwise, set to null.
@@ -280,13 +276,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 		}
 	}
 	
-	/**
-	 * Terminates this adapter.
-	 * <b>TEST HOOK ONLY!</b>. Not intended for regular use.
-	 */
-	void shutdown() {
-		
-	}
+
 	
 	/**
 	 * Determines if this JVM is running with the debug agent enabled
@@ -369,10 +359,9 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
     	if(UnsafeAdapter.ADDRESS_SIZE==4) {
         	if(value > MAX_ALIGNED_MEM_32) return value;
         	return  1 << (32 - Integer.numberOfLeadingZeros((int)value - 1));    		
-    	} else {
-        	if(value > MAX_ALIGNED_MEM_64) return value;
-        	return  1 << (64 - Long.numberOfLeadingZeros(value - 1));    		
     	}
+    	if(value > MAX_ALIGNED_MEM_64) return value;
+    	return  1 << (64 - Long.numberOfLeadingZeros(value - 1));    		
 	}    
     
 

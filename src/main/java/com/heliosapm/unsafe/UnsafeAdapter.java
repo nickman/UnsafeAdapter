@@ -45,6 +45,11 @@ public class UnsafeAdapter {
 	
 	/** The system prop specifying the use of the safe memory management implementation */
 	public static final String SAFE_MANAGER_PROP = "safe.allocations.manager";
+	/** The system prop indicating that allocations should be tracked */
+	public static final String TRACK_ALLOCS_PROP = "unsafe.allocations.track";
+	/** The system prop indicating that allocations should be alligned */
+	public static final String ALIGN_ALLOCS_PROP = "unsafe.allocations.align";
+	
     /** The unsafe instance */    
 	static final Unsafe theUNSAFE;
 	

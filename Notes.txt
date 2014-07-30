@@ -1,0 +1,15 @@
+UnsafeAdapter Notes
+===================
+
+TODO:
+=====
+
+finish SafeAdapterImpl extensions of MemoryMBean Ops
+SafeAdapterImpl needs to get SafeMemoryAllocator's cleaner thread and register with thread tracking.
+	UnsafeAdapter cleaner thread tracking.
+	
+CleanerThreads:
+	register for tracking
+	change thread name once thread term is pending
+	on interrupt, set term pending as soon as pending-allocs and refQueue are empty.
+	on terminate, unregister from tracking.	

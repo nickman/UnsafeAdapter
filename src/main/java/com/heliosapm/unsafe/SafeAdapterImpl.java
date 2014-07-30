@@ -38,7 +38,7 @@ import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
  * <p><code>com.heliosapm.unsafe.SafeAdapterImpl</code></p>
  */
 
-public class SafeAdapterImpl extends DefaultUnsafeAdapterImpl {
+public class SafeAdapterImpl extends DefaultUnsafeAdapterImpl implements SafeAdapterImplMBean {
 	
 	
 	// =========================================================
@@ -111,11 +111,13 @@ public class SafeAdapterImpl extends DefaultUnsafeAdapterImpl {
 	 */
 	@SuppressWarnings("unused")
 	private final void reset() {
-		log("***********  Resetting  ***********");
-		JMXHelper.unregisterMBean(UnsafeAdapter.SAFE_MEM_OBJECT_NAME);
+		log("***********  Resetting  ***********");		
 		try {
-			Field instanceField = ReflectionHelper.setFieldEditable(getClass(), "instance");
-			instanceField.set(null, null);
+			synchronized(lock) {
+				JMXHelper.unregisterMBean(UnsafeAdapter.SAFE_MEM_OBJECT_NAME);
+				Field instanceField = ReflectionHelper.setFieldEditable(getClass(), "instance");
+				instanceField.set(null, null);
+			}
 		} catch (Throwable t) {
 			loge("Failed to reset SafeAdapter", t);
 		}
@@ -183,5 +185,83 @@ public class SafeAdapterImpl extends DefaultUnsafeAdapterImpl {
 			((Throwable)args[args.length-1]).printStackTrace(System.err);			
 		}
 	}
+	
+	// ====================================================================================================================
+	//  MemoryMBean Overrides
+	// ====================================================================================================================
+	
+	/**
+	 * Returns the total off-heap allocated memory in bytes
+	 * @return the total off-heap allocated memory
+	 */
+	@Override
+	public long getTotalAllocatedMemory() {
+		return allocator.getTotalMemoryAllocated();
+	}
+	
+	/**
+	 * Returns the total aligned memory overhead in bytes
+	 * @return the total aligned memory overhead in bytes
+	 */
+	public long getAlignedMemoryOverhead() {
+		return -1L; // TODO: Fixme
+	}
+	
+	
+	/**
+	 * Returns the total off-heap allocated memory in Kb
+	 * @return the total off-heap allocated memory
+	 */
+	public long getTotalAllocatedMemoryKb() {
+		long mem = totalMemoryAllocated.get();
+		return mem < 1 ? 0L : roundMem(mem, 1024);		
+	}
+	
+	/**
+	 * Returns the total off-heap allocated memory in Mb
+	 * @return the total off-heap allocated memory
+	 */
+	public long getTotalAllocatedMemoryMb() {
+		long mem = totalMemoryAllocated.get();
+		return mem < 1 ? 0L : roundMem(mem, 1024);		
+	}
+	
+	/**
+	 * Rounds calculated memory sizes when converting from bytes to Kb and Mb.
+	 * @param total The total memory allocated in bytes
+	 * @param div The divisor
+	 * @return the rounded memory in Kb or Mb.
+	 */
+	private long roundMem(double total, double div) {
+		if(total<1) return 0L;
+		double d = total / div;
+		return Math.round(d);
+	}
+	
+
+	/**
+	 * Returns the total number of existing allocations, not including the base line defined in {@link UnsafeAdapterOld#BASELINE_ALLOCS}
+	 * @return the total number of existing allocations
+	 */
+	public int getTotalAllocationCount() {
+		return allocator.getTotalAllocations();
+	}
+	    	
+	/**
+	 * Returns the number of retained phantom references to memory allocations
+	 * @return the number of retained phantom references to memory allocations
+	 */
+	public int getPendingRefs() {
+		return allocator.getPending();
+	}
+	
+	/**
+	 * Returns the size of the reference queue
+	 * @return the size of the reference queue
+	 */
+	public long getReferenceQueueSize() {
+		return allocator.getRefQueuePending();
+	}
+
 	
 }
