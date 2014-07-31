@@ -28,8 +28,6 @@ import java.lang.management.ManagementFactory;
 import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -227,6 +225,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	 */
 	public void run() {
 		log("Starting Unsafe Cleaner Thread [%s]", Thread.currentThread().getName());
+		UnsafeAdapter.registerCleanerThread(Thread.currentThread());
 		boolean terminating = false;
 		while(true) {
 			try {
@@ -235,16 +234,18 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 					ref.close();
 				}
 				if(terminating) {
-					if(getRefQueuePending()==0) break;
+					if(getRefQueuePending()<1 && getPendingRefs()<1 ) break;
 				}
 			} catch (InterruptedException e) {
-				if(getRefQueuePending()==0) break;
+				if(getRefQueuePending()<1 && getPendingRefs()<1 ) break;
 				terminating=true;
+				Thread.currentThread().setName("[Terminating]" + Thread.currentThread().getName());
 			} catch (Exception e) {
 				loge("Unexpected exception [%s] in cleaner loop. Will Continue.", e);
 			}
 		}			
 		log("Unsafe Cleaner Thread [%s] Terminated", Thread.currentThread().getName());
+		UnsafeAdapter.removeCleanerThread(Thread.currentThread());
 	}
 	
 	/**

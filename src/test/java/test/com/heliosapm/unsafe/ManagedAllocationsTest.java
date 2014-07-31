@@ -24,6 +24,8 @@
  */
 package test.com.heliosapm.unsafe;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.junit.Assert;
 import org.junit.BeforeClass;
 
@@ -41,21 +43,23 @@ import com.heliosapm.unsafe.UnsafeAdapter;
  */
 
 public class ManagedAllocationsTest extends BasicAllocationsTest {
-	
-	/**
-	 * Sets the baseline state (unsafe) of the adapter and enabled memory tracking for this test
-	 */
-	@BeforeClass
-	public static void baselineState() {		
-		System.clearProperty(UnsafeAdapter.SAFE_MANAGER_PROP);
-		System.setProperty("unsafe.allocations.track", "true");
-		ReflectionHelper.invoke(UnsafeAdapter.class, "reset");
-		Assert.assertEquals("UnsafeAdapter is not in managed memory-tracking mode", true, UnsafeAdapter.getMemoryMBean().isTrackingEnabled());
-		Assert.assertFalse("Adapter was not set to unsafe", UnsafeAdapter.isSafeAdapter());		
-		Assert.assertTrue("Unsafe Adapter MBean Was Not Registered", JMXHelper.getDefaultMBeanServer().isRegistered(UnsafeAdapter.UNSAFE_MEM_OBJECT_NAME));
-		Assert.assertFalse("Safe Adapter MBean Was Registered", JMXHelper.getDefaultMBeanServer().isRegistered(UnsafeAdapter.SAFE_MEM_OBJECT_NAME));
-		log(UnsafeAdapter.printStatus());
+	/** Indicates if the baseline has been set for this class */
+	static final AtomicBoolean baselineSet = new AtomicBoolean(false);
+
+	{
+		if(baselineSet.compareAndSet(false, true)) {
+			System.clearProperty(UnsafeAdapter.SAFE_MANAGER_PROP);
+			System.setProperty("unsafe.allocations.track", "true");
+			ReflectionHelper.invoke(UnsafeAdapter.class, "reset");
+			Assert.assertEquals("UnsafeAdapter is not in managed memory-tracking mode", true, UnsafeAdapter.getMemoryMBean().isTrackingEnabled());
+			Assert.assertFalse("Adapter was not set to unsafe", UnsafeAdapter.isSafeAdapter());		
+			Assert.assertTrue("Unsafe Adapter MBean Was Not Registered", JMXHelper.getDefaultMBeanServer().isRegistered(UnsafeAdapter.UNSAFE_MEM_OBJECT_NAME));
+			Assert.assertFalse("Safe Adapter MBean Was Registered", JMXHelper.getDefaultMBeanServer().isRegistered(UnsafeAdapter.SAFE_MEM_OBJECT_NAME));
+			log(UnsafeAdapter.printStatus());
+		}
 	}
+	
+	
 
 	
 }

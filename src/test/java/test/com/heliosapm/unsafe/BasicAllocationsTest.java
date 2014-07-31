@@ -24,8 +24,9 @@
  */
 package test.com.heliosapm.unsafe;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.junit.Assert;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.heliosapm.unsafe.JMXHelper;
@@ -41,20 +42,21 @@ import com.heliosapm.unsafe.UnsafeAdapter;
  */
 @SuppressWarnings("restriction")
 public class BasicAllocationsTest extends BaseTest {
+	/** Indicates if the baseline has been set for this class */
+	static final AtomicBoolean baselineSet = new AtomicBoolean(false);
 	
-	/**
-	 * Sets the baseline state (unsafe) of the adapter for this test
-	 */
-	@BeforeClass
-	public static void baselineState() {		
-		System.clearProperty(UnsafeAdapter.SAFE_MANAGER_PROP);
-		ReflectionHelper.invoke(UnsafeAdapter.class, "reset");
-		Assert.assertFalse("Adapter was not set to unsafe", UnsafeAdapter.isSafeAdapter());		
-		Assert.assertTrue("Unsafe Adapter MBean Was Not Registered", JMXHelper.getDefaultMBeanServer().isRegistered(UnsafeAdapter.UNSAFE_MEM_OBJECT_NAME));
-		Assert.assertFalse("Safe Adapter MBean Was Registered", JMXHelper.getDefaultMBeanServer().isRegistered(UnsafeAdapter.SAFE_MEM_OBJECT_NAME));
-		log(UnsafeAdapter.printStatus());
+
+	{
+		if(baselineSet.compareAndSet(false, true)) {
+			System.clearProperty(UnsafeAdapter.SAFE_MANAGER_PROP);
+			ReflectionHelper.invoke(UnsafeAdapter.class, "reset");
+			Assert.assertFalse("Adapter was not set to unsafe", UnsafeAdapter.isSafeAdapter());		
+			Assert.assertTrue("Unsafe Adapter MBean Was Not Registered", JMXHelper.getDefaultMBeanServer().isRegistered(UnsafeAdapter.UNSAFE_MEM_OBJECT_NAME));
+			Assert.assertFalse("Safe Adapter MBean Was Registered", JMXHelper.getDefaultMBeanServer().isRegistered(UnsafeAdapter.SAFE_MEM_OBJECT_NAME));
+			log(UnsafeAdapter.printStatus());
+		}
 	}
-	
+
 
 	/**
 	 * Tests a long allocation, write, read and deallocation
@@ -367,25 +369,25 @@ public class BasicAllocationsTest extends BaseTest {
          */
         @Test
         public void testReallocatedInteger() throws Exception {
-            int address = -1;
+            long address = -1;
             try {
                 address = UnsafeAdapter.allocateMemory(4);
                 int value = nextPosInteger();
                 int nextValue = nextPosInteger();
-                UnsafeAdapter.putInteger(address, value);
-                Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getInteger(address));
-                Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getInteger(address));    
+                UnsafeAdapter.putInt(address, value);
+                Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getInt(address));
+                Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getInt(address));    
                 if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
                     Assert.assertEquals("Mem Total Alloc was unexpected", 4, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
                 } else {
                     Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
                 }            
                 address = UnsafeAdapter.reallocateMemory(address, 4*2);
-                UnsafeAdapter.putInteger(address + 8, nextValue);
-                Assert.assertEquals("First Value was not [" + value + "]", value, UnsafeAdapter.getInteger(address));
-                Assert.assertEquals("First Value was not [" + value + "]", value, testUnsafe.getInteger(address));    
-                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, UnsafeAdapter.getInteger(address + 4));
-                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, testUnsafe.getInteger(address + 4));    
+                UnsafeAdapter.putInt(address + 4, nextValue);
+                Assert.assertEquals("First Value was not [" + value + "]", value, UnsafeAdapter.getInt(address));
+                Assert.assertEquals("First Value was not [" + value + "]", value, testUnsafe.getInt(address));    
+                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, UnsafeAdapter.getInt(address + 4));
+                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, testUnsafe.getInt(address + 4));    
                 if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
                     Assert.assertEquals("Mem Total Alloc was unexpected", 4*2, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
                 } else {
@@ -401,6 +403,252 @@ public class BasicAllocationsTest extends BaseTest {
             }
         }
 
+
+
+        /**
+         * Tests a byte allocation, write, read, re-allocation and deallocation
+         * @throws Exception thrown on any error
+         */
+        @Test
+        public void testReallocatedByte() throws Exception {
+            long address = -1;
+            try {
+                address = UnsafeAdapter.allocateMemory(1);
+                byte value = nextPosByte();
+                byte nextValue = nextPosByte();
+                UnsafeAdapter.putByte(address, value);
+                Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getByte(address));
+                Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getByte(address));    
+                if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", 1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                } else {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                }            
+                address = UnsafeAdapter.reallocateMemory(address, 1*2);
+                UnsafeAdapter.putByte(address + 1, nextValue);
+                Assert.assertEquals("First Value was not [" + value + "]", value, UnsafeAdapter.getByte(address));
+                Assert.assertEquals("First Value was not [" + value + "]", value, testUnsafe.getByte(address));    
+                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, UnsafeAdapter.getByte(address + 1));
+                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, testUnsafe.getByte(address + 1));    
+                if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", 1*2, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                } else {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                }            
+            } finally {
+                if(address!=-1) UnsafeAdapter.freeMemory(address);
+                if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", 0, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                } else {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                }
+            }
+        }
+
+
+        /**
+         * Tests a boolean allocation, write, read, re-allocation and deallocation
+         * @throws Exception thrown on any error
+         */
+        @Test
+        public void testReallocatedBoolean() throws Exception {
+            long address = -1;
+            try {
+                address = UnsafeAdapter.allocateMemory(1);
+                boolean value = nextBoolean();
+                boolean nextValue = nextBoolean();
+                UnsafeAdapter.putBoolean(address, value);
+                Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getBoolean(address));
+                Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getBoolean(null, address));    
+                if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", 1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                } else {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                }            
+                address = UnsafeAdapter.reallocateMemory(address, 1*2);
+                UnsafeAdapter.putBoolean(address + 1, nextValue);
+                Assert.assertEquals("First Value was not [" + value + "]", value, UnsafeAdapter.getBoolean(address));
+                Assert.assertEquals("First Value was not [" + value + "]", value, testUnsafe.getBoolean(null, address));    
+                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, UnsafeAdapter.getBoolean(address + 1));
+                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, testUnsafe.getBoolean(null, address + 1));    
+                if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", 1*2, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                } else {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                }            
+            } finally {
+                if(address!=-1) UnsafeAdapter.freeMemory(address);
+                if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", 0, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                } else {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                }
+            }
+        }
+
+
+        /**
+         * Tests a char allocation, write, read, re-allocation and deallocation
+         * @throws Exception thrown on any error
+         */
+        @Test
+        public void testReallocatedCharacter() throws Exception {
+            long address = -1;
+            try {
+                address = UnsafeAdapter.allocateMemory(2);
+                char value = nextCharacter();
+                char nextValue = nextCharacter();
+                UnsafeAdapter.putChar(address, value);
+                Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getChar(address));
+                Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getChar(address));    
+                if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", 2, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                } else {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                }            
+                address = UnsafeAdapter.reallocateMemory(address, 2*2);
+                UnsafeAdapter.putChar(address + 2, nextValue);
+                Assert.assertEquals("First Value was not [" + value + "]", value, UnsafeAdapter.getChar(address));
+                Assert.assertEquals("First Value was not [" + value + "]", value, testUnsafe.getChar(address));    
+                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, UnsafeAdapter.getChar(address + 2));
+                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, testUnsafe.getChar(address + 2));    
+                if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", 2*2, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                } else {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                }            
+            } finally {
+                if(address!=-1) UnsafeAdapter.freeMemory(address);
+                if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", 0, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                } else {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                }
+            }
+        }
+
+
+        /**
+         * Tests a short allocation, write, read, re-allocation and deallocation
+         * @throws Exception thrown on any error
+         */
+        @Test
+        public void testReallocatedShort() throws Exception {
+            long address = -1;
+            try {
+                address = UnsafeAdapter.allocateMemory(2);
+                short value = nextPosShort();
+                short nextValue = nextPosShort();
+                UnsafeAdapter.putShort(address, value);
+                Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getShort(address));
+                Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getShort(address));    
+                if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", 2, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                } else {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                }            
+                address = UnsafeAdapter.reallocateMemory(address, 2*2);
+                UnsafeAdapter.putShort(address + 2, nextValue);
+                Assert.assertEquals("First Value was not [" + value + "]", value, UnsafeAdapter.getShort(address));
+                Assert.assertEquals("First Value was not [" + value + "]", value, testUnsafe.getShort(address));    
+                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, UnsafeAdapter.getShort(address + 2));
+                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, testUnsafe.getShort(address + 2));    
+                if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", 2*2, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                } else {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                }            
+            } finally {
+                if(address!=-1) UnsafeAdapter.freeMemory(address);
+                if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", 0, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                } else {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                }
+            }
+        }
+
+
+        /**
+         * Tests a float allocation, write, read, re-allocation and deallocation
+         * @throws Exception thrown on any error
+         */
+        @Test
+        public void testReallocatedFloat() throws Exception {
+            long address = -1;
+            try {
+                address = UnsafeAdapter.allocateMemory(4);
+                float value = nextPosFloat();
+                float nextValue = nextPosFloat();
+                UnsafeAdapter.putFloat(address, value);
+                Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getFloat(address), 0f);
+                Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getFloat(address), 0f);    
+                if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", 4, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                } else {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                }            
+                address = UnsafeAdapter.reallocateMemory(address, 4*2);
+                UnsafeAdapter.putFloat(address + 4, nextValue);
+                Assert.assertEquals("First Value was not [" + value + "]", value, UnsafeAdapter.getFloat(address), 0f);
+                Assert.assertEquals("First Value was not [" + value + "]", value, testUnsafe.getFloat(address), 0f);    
+                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, UnsafeAdapter.getFloat(address + 4), 0f);
+                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, testUnsafe.getFloat(address + 4), 0f);    
+                if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", 4*2, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                } else {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                }            
+            } finally {
+                if(address!=-1) UnsafeAdapter.freeMemory(address);
+                if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", 0, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                } else {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                }
+            }
+        }
+
+
+        /**
+         * Tests a double allocation, write, read, re-allocation and deallocation
+         * @throws Exception thrown on any error
+         */
+        @Test
+        public void testReallocatedDouble() throws Exception {
+            long address = -1;
+            try {
+                address = UnsafeAdapter.allocateMemory(8);
+                double value = nextPosDouble();
+                double nextValue = nextPosDouble();
+                UnsafeAdapter.putDouble(address, value);
+                Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getDouble(address), 0d);
+                Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getDouble(address), 0d);    
+                if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", 8, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                } else {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                }            
+                address = UnsafeAdapter.reallocateMemory(address, 8*2);
+                UnsafeAdapter.putDouble(address + 8, nextValue);
+                Assert.assertEquals("First Value was not [" + value + "]", value, UnsafeAdapter.getDouble(address), 0d);
+                Assert.assertEquals("First Value was not [" + value + "]", value, testUnsafe.getDouble(address), 0d);    
+                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, UnsafeAdapter.getDouble(address + 8), 0d);
+                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, testUnsafe.getDouble(address + 8), 0d);    
+                if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", 8*2, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                } else {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                }            
+            } finally {
+                if(address!=-1) UnsafeAdapter.freeMemory(address);
+                if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", 0, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                } else {
+                    Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+                }
+            }
+        }
 
 	    
 	

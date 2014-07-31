@@ -30,6 +30,10 @@ import java.security.ProtectionDomain;
 
 import javax.management.ObjectName;
 
+import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
+
+import com.heliosapm.unsafe.DefaultUnsafeAdapterImpl.MemoryAllocationReference;
+
 import sun.misc.Unsafe;
 
 /**
@@ -81,6 +85,10 @@ public class UnsafeAdapter {
 
 	/** The configured adapter (default or safe) */
 	private static final DefaultUnsafeAdapterImpl adapter;
+	/** A map of cleaner threads keyed by the thread Id */
+    /** A map of memory allocation references keyed by an internal counter */
+    protected static final NonBlockingHashMapLong<Thread> cleanerThreads = new NonBlockingHashMapLong<Thread>();
+
 
 	static {
 		// =========================================================
@@ -161,6 +169,33 @@ public class UnsafeAdapter {
 		return adapter;
 	}
 	
+	/**
+	 * Registers a cleaner thread for tracking
+	 * @param thread the cleaner thread to track
+	 */
+	static void registerCleanerThread(Thread thread) {
+		if(thread!=null) {
+			cleanerThreads.put(thread.getId(), thread);
+		}
+	}
+	
+	/**
+	 * Removes a cleaner thread from tracking
+	 * @param thread the cleaner thread to remove
+	 */
+	static void removeCleanerThread(Thread thread) {
+		if(thread!=null) {
+			cleanerThreads.remove(thread.getId());
+		}		
+	}
+	
+	/**
+	 * Returns the number of registered cleaner threads
+	 * @return the number of registered cleaner threads
+	 */
+	public static int getCleanerThreadCount() {
+		return cleanerThreads.size();
+	}
 	
 	// =====================================================================================================
 	// Direct calls to theUNSAFE
