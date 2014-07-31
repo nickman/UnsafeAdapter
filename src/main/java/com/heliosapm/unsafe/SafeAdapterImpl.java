@@ -50,10 +50,6 @@ public class SafeAdapterImpl extends DefaultUnsafeAdapterImpl implements SafeAda
 	private static final Object lock = new Object();
 	
 	
-	/** The system prop indicating if safe allocations should be on heap */
-	public static final String SAFE_ALLOCS_ONHEAP_PROP = "safe.allocations.onheap";	
-	/** The maximum safe memory allocation */
-	public static final long MAX_SAFE_MEM_SIZE = Integer.MAX_VALUE;
 
 	
 	/** A map of memory allocation sizes keyed by the address */
@@ -84,7 +80,7 @@ public class SafeAdapterImpl extends DefaultUnsafeAdapterImpl implements SafeAda
 	 */
 	SafeAdapterImpl() {
 		super();
-		onHeap = System.getProperties().containsKey(SAFE_ALLOCS_ONHEAP_PROP);
+		onHeap = System.getProperties().containsKey(UnsafeAdapter.SAFE_ALLOCS_ONHEAP_PROP);
 		if(trackMem) {
 			safeMemoryAllocations = new NonBlockingHashMapLong<ByteBuffer>(1024, true);
 		} else {
@@ -132,7 +128,7 @@ public class SafeAdapterImpl extends DefaultUnsafeAdapterImpl implements SafeAda
 	 * @see sun.misc.Unsafe#allocateMemory(long)
 	 */
 	long _allocateMemory(long size, long alignmentOverhead) {
-		if(size > MAX_SAFE_MEM_SIZE || size < 1) throw new IllegalArgumentException("Invalid Safe Memory Size [" + size + "]", new Throwable());
+		if(size > Integer.MAX_VALUE || size < 1) throw new IllegalArgumentException("Invalid Safe Memory Size [" + size + "]", new Throwable());
 		ByteBuffer buff = onHeap ? ByteBuffer.allocate((int)size) : ByteBuffer.allocateDirect((int)size);
 		long address = UnsafeAdapter.getAddressOf(buff);
 		if(trackMem) {		

@@ -70,6 +70,14 @@ public class UnsafeAdapter {
 	public static final ObjectName SAFE_MEM_OBJECT_NAME = JMXHelper.objectName("com.heliosapm.unsafe:service=MemoryAllocationService,type=safe");
 	/** The JMX ObjectName for the currently enabled memory allocation JMX management interface MBean */
 	public static final ObjectName MEM_OBJECT_NAME = JMXHelper.objectName("com.heliosapm.unsafe:service=MemoryAllocationService");
+	/** The system prop indicating if safe allocations should be on heap */
+	public static final String SAFE_ALLOCS_ONHEAP_PROP = "safe.allocations.onheap";	
+
+	/** The max 32bit memory size that can be cache-line aligned */
+	public static final int MAX_ALIGNED_MEM_32 = 1073741824;
+	/** The max 64bit memory size that can be cache-line aligned */
+	public static final long MAX_ALIGNED_MEM_64 = 4611686018427387904L;
+	
 
 	/** The configured adapter (default or safe) */
 	private static final DefaultUnsafeAdapterImpl adapter;
@@ -157,6 +165,15 @@ public class UnsafeAdapter {
 	// =====================================================================================================
 	// Direct calls to theUNSAFE
 	// =====================================================================================================
+	
+	/**
+	 * Returns the largest memory base that can usefully be cache-line aligned
+	 * @return the largest memory base that can usefully be cache-line aligned
+	 */
+	public static long getMaxCacheLineAlignBase() {
+		if(ADDRESS_SIZE==4) return MAX_ALIGNED_MEM_32;
+		return MAX_ALIGNED_MEM_64;
+	}
 	
 	/**
      * Returns the address of the passed object
@@ -1943,32 +1960,6 @@ public class UnsafeAdapter {
 	//===========================================================================================================
 	//	Object Write Ops
 	//===========================================================================================================	
-	
-	/**
-	 * Stores a value into a given memory address.  If the address is zero, or
-	 * does not point into a block obtained from #allocateMemory , the
-	 * results are undefined.
-	 * @param address the address to write to
-	 * @param value The value to write
-	 * @see sun.misc.Unsafe#putObject(Object, long, Object)
-	 */
-	public static void putObject(long address, Object value) {
-		adapter.putObject(address, value);
-	}
-
-	/**
-	 * Stores a value into a given offset off the base address of the passed object.
-	 * If the object is null, then the offset is assumed to be an absolute address.
-	 * @param object The target object, the base address of which the offset is based off
-	 * @param offset The offset off the base address of the target object, 
-	 * or the absolute address to write to if the target object is null
-	 * @param value The value to write
-	 * @deprecated As - of 1.4.1, cast the 32-bit offset argument to a long. See #staticFieldOffset .
-	 * @see sun.misc.Unsafe#putObject(java.lang.Object, int, Object)
-	 */
-	public static void putObject(Object object, int offset, Object value) {
-		theUNSAFE.putObject(object, offset, value);
-	}
 
 	/**
 	 * Stores a value into a given offset off the base address of the passed object.
@@ -1995,38 +1986,50 @@ public class UnsafeAdapter {
 		theUNSAFE.putObjectVolatile(object, offset, value);
 	}
 	
-	/**
-	 * Volatile version of {@link #putObject(long, Object)}
-	 * @param address The address to write to
-	 * @param value The value to write
-	 * @see sun.misc.Unsafe#putObjectVolatile(java.lang.Object, long, Object)
-	 */
-	public static void putObjectVolatile(long address, Object value) {
-		adapter.putObjectVolatile(address, value);
-	}
 	
 	/**
-	 * @param arg0
-	 * @param arg1
-	 * @param arg2
+	 * Version of #putObjectVolatile(Object, long, Object) 
+	 * that does not guarantee immediate visibility of the store to
+	 * other threads. This method is generally only useful if the
+	 * underlying field is a Java volatile (or if an array cell, one
+	 * that is otherwise only accessed using volatile accesses).
+	 * @param targetObject The target object, the base address of which the offset is based off
+	 * @param offset The offset off the base address of the target object, 
+	 * or the absolute address to write to if the target object is null
+	 * @param value The value to write
 	 * @see sun.misc.Unsafe#putOrderedObject(java.lang.Object, long, java.lang.Object)
 	 */
-	public static void putOrderedObject(Object arg0, long arg1, Object arg2) {
-		theUNSAFE.putOrderedObject(arg0, arg1, arg2);
+	public static void putOrderedObject(Object targetObject, long offset, Object value) {
+		theUNSAFE.putOrderedObject(targetObject, offset, value);
 	}
 		
 	
 	
 	// =======================================================================================================
 	
-
+	/**
+	 * Returns a status and config summary for the Unsafe Adapter.
+	 * @return a status and config summary
+	 */
+	public static String printStatus() {
+		StringBuilder b = new StringBuilder("[UnsafeAdapter Status]");
+		b.append("\n\tAdapter Type: ").append(adapter==null ? "None" : adapter.getClass().getName());		
+		b.append("\n\tAllocation Model: ").append(isSafeAdapter() ? "SAFE" : "UNSAFE");
+		b.append("\n\tAllocation Tracking: ").append(adapter==null ? "Unknown" : adapter.isTrackingEnabled() ? "Enabled" : "Disabled");
+		b.append("\n\tCache-Line Alignment: ").append(adapter==null ? "Unknown" : adapter.isAlignmentEnabled() ? "Enabled" : "Disabled");
+		b.append("\n\tCPU Model: ").append(ADDRESS_SIZE==4 ? "32" : "64");
+		b.append("\n\tJVM 5 Copy: ").append(adapter==null ? "Unknown" : adapter.isFiveCopy() ? "Yes" : "No");
+		b.append("\n\tJVM 4 Set: ").append(adapter==null ? "Unknown" : adapter.isFourSet() ? "Yes" : "No");
+		return b.append("\n").toString();
+	}
+		
 	
 	/**
 	 * Prints information about the currently configured adapter.
 	 * @param args None
 	 */
 	public static void main(String[] args) {
-
+		System.out.println(printStatus());
 	}
 
 	/**

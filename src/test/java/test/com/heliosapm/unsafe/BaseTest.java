@@ -30,6 +30,8 @@ import java.io.PrintStream;
 import java.lang.management.ManagementFactory;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -118,6 +120,22 @@ public class BaseTest {
 	}
 	
 	/**
+	 * Returns a random positive int
+	 * @return a random positive int
+	 */
+	protected static int nextPosInteger() {
+		return Math.abs(RANDOM.nextInt());
+	}
+	
+	/**
+	 * Returns a random positive float
+	 * @return a random positive float
+	 */
+	protected static float nextPosFloat() {
+		return Math.abs(RANDOM.nextFloat());
+	}
+	
+	/**
 	 * Returns a random positive double
 	 * @return a random positive double
 	 */
@@ -133,6 +151,43 @@ public class BaseTest {
 	protected static int nextPosInt() {
 		return Math.abs(RANDOM.nextInt());
 	}
+	
+	/**
+	 * Returns a random positive short
+	 * @return a random positive short
+	 */
+	protected static short nextPosShort() {
+		return (short) Math.abs(ByteBuffer.allocate(4).putInt(RANDOM.nextInt()).getShort(0));
+	}
+	
+	/**
+	 * Returns a random positive byte
+	 * @return a random positive byte
+	 */
+	protected static byte nextPosByte() {
+		final byte[] b = new byte[1];
+		RANDOM.nextBytes(b);
+		return (byte)Math.abs(b[0]);
+	}
+	
+	/**
+	 * Returns a random boolean
+	 * @return a random boolean
+	 */
+	protected static boolean nextBoolean() {
+		return RANDOM.nextBoolean();		
+	}
+	
+	/**
+	 * Returns a random char
+	 * @return a random char
+	 */
+	protected static char nextCharacter() {
+		return (char)nextPosShort();		
+	}
+
+	
+	
 	/**
 	 * Returns a random positive int within the bound
 	 * @param bound the bound on the random number to be returned. Must be positive. 

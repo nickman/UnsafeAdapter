@@ -79,6 +79,8 @@ public class SafeMemoryAllocator implements Runnable {
 	private final Object queueLengthFieldLock;
 	/** The configured native memory alignment enablement  */
 	public final boolean alignMem;
+	/** The configured safe memory direct-or-not designation */
+	public final boolean onHeap;
 	/** A map of allocation weak references */ 
 	final Map<Range, SafeMemoryAllocationWeakReference> allocations;
 	/** A weak ref key map of safe allocations keyed by the deallocation long array */
@@ -119,6 +121,7 @@ public class SafeMemoryAllocator implements Runnable {
 		refQueue = new ReferenceQueue<SafeMemoryAllocation>();
 		cleanerThread = new Thread(this, "SafeMemoryAllocationCleaner#" + cleanerSerial.incrementAndGet());
 		alignMem = System.getProperties().containsKey(UnsafeAdapter.ALIGN_ALLOCS_PROP);
+		onHeap = System.getProperties().containsKey(UnsafeAdapter.SAFE_ALLOCS_ONHEAP_PROP);
 		try {
 			queueLengthField = ReferenceQueue.class.getDeclaredField("queueLength");
 			queueLengthField.setAccessible(true);
@@ -166,7 +169,7 @@ public class SafeMemoryAllocator implements Runnable {
 	}
 	
 	int getPending() {
-		return 
+		return -1; // FIXME
 	}
 	
 	/**
@@ -183,7 +186,7 @@ public class SafeMemoryAllocator implements Runnable {
 			try {
 				SafeMemoryAllocationWeakReference ref = (SafeMemoryAllocationWeakReference)refQueue.remove();
 				if(ref!=null) {
-					ref.close();
+					ref.clear();
 				}
 				if(terminating) {
 					if(getPending()==0) break;
@@ -201,12 +204,12 @@ public class SafeMemoryAllocator implements Runnable {
 	/**
 	 * Allocates a new safe memory block
 	 * @param size The size of the memory block in bytes
-	 * @param onHeap true for heap memory, false for direct memory
 	 * @return the notional address of the block
 	 */
-	public long allocate(long size, boolean onHeap) {
+	public long allocate(long size) {
 		SafeMemoryAllocation sma = new SafeMemoryAllocation(size, onHeap);
-		allocations.put(sma.range, new SafeMemoryAllocationWeakReference(sma));
+		Range range = sma.range();
+		allocations.put(range, new SafeMemoryAllocationWeakReference(sma, range));
 		totalMemory.addAndGet(size);
 		return sma.startRange;
 	}
@@ -214,13 +217,14 @@ public class SafeMemoryAllocator implements Runnable {
 	/**
 	 * Allocates a new safe memory block, cache-line aligned for consistency if alignment is enabled
 	 * @param size The size of the memory block in bytes
-	 * @param onHeap true for heap memory, false for direct memory
 	 * @return the notional address of the block
 	 */
-	public long allocateAligned(long size, boolean onHeap) {
+	public long allocateAligned(long size) {
 		final long alignedSize = DefaultUnsafeAdapterImpl.findNextPositivePowerOfTwo(size);
-		SafeMemoryAllocation sma = new SafeMemoryAllocation(size, onHeap);
-		allocations.put(sma.range, new SafeMemoryAllocationWeakReference(sma));
+		final long alignmentOverhead = alignedSize-size;
+		SafeMemoryAllocation sma = new SafeMemoryAllocation(size, alignmentOverhead, onHeap);
+		Range range = sma.range();
+		allocations.put(range, new SafeMemoryAllocationWeakReference(sma, range));
 		totalMemory.addAndGet(size);
 		totalAlignmentOverhead.addAndGet(alignedSize-size);
 		return sma.startRange;
@@ -287,70 +291,163 @@ public class SafeMemoryAllocator implements Runnable {
 	
 	
 	public static void main(String[] args) {
-		log("Safe Test");
-		SafeMemoryAllocator sma = new SafeMemoryAllocator();
-		
-		long address = sma.allocate(100, false);
-		log("Address:" + address + "  Allocations:" + sma.allocations.size());
-		SafeMemoryAllocation alloc = sma.getAllocation(address);
-		log("Allocation:" + alloc);
-		alloc = sma.getAllocation(address + 2);
-		log("Allocation:" + alloc);
+//		log("Safe Test");
+//		SafeMemoryAllocator sma = new SafeMemoryAllocator();
+//		
+//		long address = sma.allocate(100, false);
+//		log("Address:" + address + "  Allocations:" + sma.allocations.size());
+//		SafeMemoryAllocation alloc = sma.getAllocation(address);
+//		log("Allocation:" + alloc);
+//		alloc = sma.getAllocation(address + 2);
+//		log("Allocation:" + alloc);
 	}
 	
 	public static void log(Object msg) {
 		System.out.println(msg);
 	}
 	
-    class MemoryAllocationReference extends WeakReference<DeAllocateMe> {
+
+	
+	class SafeMemoryAllocationWeakReference extends WeakReference<SafeMemoryAllocation> {
+		/** The size of the allocation */
+		final long size;
+		/** The alignment overhead of the allocation */
+		final long alignmentOverhead;
     	/** The index of this reference */
     	private final long index = refIndexFactory.incrementAndGet();
     	/** The memory addresses owned by this reference */
     	private final long[][] addresses;
-    	
-		/**
-		 * Creates a new MemoryAllocationReference
-		 * @param referent the memory address holder
-		 */
-		public MemoryAllocationReference(final DeAllocateMe referent) {
-			super(referent, refQueue);
-			addresses = referent==null ? EMPTY_ADDRESSES : referent.getAddresses();
-			deAllocs.put(index, this);
-		}    	
+    	/** The Range for the referent's allocation */
+    	private final Range range;
 		
-		/**
-		 * Deallocates the referenced memory blocks 
-		 */
-		public void close() {
-			for(long[] address: addresses) {
-				if(address[0]>0) {
-					freeMemory(address[0]);
-					address[0] = 0L;
-				}
-				deAllocs.remove(index);
-			}
-			super.clear();
-		}
-    }
-
-	
-	class SafeMemoryAllocationWeakReference extends WeakReference<SafeMemoryAllocation> {
-		final long size;
-		final long alignmentOverhead;
-		final Range range;
 		
-		public SafeMemoryAllocationWeakReference(SafeMemoryAllocation allocation) {
+		public SafeMemoryAllocationWeakReference(SafeMemoryAllocation allocation, Range range, DeAllocateMe referent) {
 			super(allocation, refQueue);
+			this.range = range;
 			size = allocation.size * -1L;
 			alignmentOverhead = allocation.alignmentOverhead * -1L;
-			range = allocation.range;
-		}		
-		public void close() { 
-			allocations.remove(range);
+			addresses = referent==null ? EMPTY_ADDRESSES : referent.getAddresses();
+		}
+
+		public SafeMemoryAllocationWeakReference(SafeMemoryAllocation allocation, Range range) {
+			this(allocation, range, null);
+		}
+		
+		
+		public void clear() {			
+			allocations.remove(index);
 			totalMemory.addAndGet(size);
 			totalAlignmentOverhead.addAndGet(alignmentOverhead);
+			super.clear();
 		}
+		
 	}
+	
+	/**
+	 * <p>Title: SafeMemoryAllocation</p>
+	 * <p>Description: A memory allocation class intended to mimic dirct unsafe allocations in safe memory.</p> 
+	 * <p>Company: Helios Development Group LLC</p>
+	 * @author Whitehead (nwhitehead AT heliosdev DOT org)
+	 * <p><code>com.heliosapm.unsafe.SafeMemoryAllocator.SafeMemoryAllocation</code></p>
+	 */
+	static class SafeMemoryAllocation {
+		/** The allocated block of memory */
+		final ByteBuffer block;
+		/** The size of the block */
+		final long size;
+		/** The alignment overhead */
+		final long alignmentOverhead;		
+		/** The notional address of the memory block */
+		final long startRange;
+		/** The notional end address of the memory block */
+		final long endRange;
+
+
+
+		/**
+		 * Creates a new SafeMemoryAllocation
+		 * @param size The size of the allocation in bytes
+		 * @param alignmentOverhead The size of the alignment overhead
+		 * @param onHeap true for on heap memory, false for direct
+		 * @param referent optional The auto-tracking dealocation reference
+		 */
+		SafeMemoryAllocation(long size, long alignmentOverhead, boolean onHeap, DeAllocateMe referent) {
+			if(size > Integer.MAX_VALUE || size < 1) throw new IllegalArgumentException("Invalid Safe Memory Size [" + size + "]", new Throwable());
+			this.size = size;
+			this.alignmentOverhead = alignmentOverhead;
+			block = onHeap ? ByteBuffer.allocate((int)size) : ByteBuffer.allocateDirect((int)size);
+			startRange = UnsafeAdapter.getAddressOf(block);
+			endRange = startRange + size;			
+		}
+		
+		/**
+		 * Creates a memory range for this allocation
+		 * @return a memory range 
+		 */
+		Range range() {
+			return Range.range(startRange, endRange);
+		}
+
+		/**
+		 * Creates a new SafeMemoryAllocation
+		 * @param size The size of the allocation in bytes
+		 * @param alignmentOverhead The size of the alignment overhead
+		 * @param onHeap true for on heap memory, false for direct
+		 */
+		SafeMemoryAllocation(long size, long alignmentOverhead, boolean onHeap) {
+			this(size, alignmentOverhead, onHeap, null);
+		}
+
+
+		/**
+		 * Creates a new SafeMemoryAllocation with zero allocation overhead
+		 * @param size The size of the allocation in bytes
+		 * @param onHeap true for on heap memory, false for direct
+		 */
+		SafeMemoryAllocation(long size, boolean onHeap) {
+			this(size, 0L, onHeap);
+		}
+
+		/**
+		 * Creates a new SafeMemoryAllocation with zero allocation overhead
+		 * @param size The size of the allocation in bytes
+		 * @param onHeap true for on heap memory, false for direct
+		 * @param referent optional The auto-tracking dealocation reference
+		 */
+		SafeMemoryAllocation(long size, boolean onHeap, DeAllocateMe referent) {
+			this(size, 0L, onHeap, referent);
+		}
+
+		/**
+		 * {@inheritDoc}
+		 * @see java.lang.Object#toString()
+		 */
+		public String toString() {
+			return block.isDirect() ? String.format("DirectSafeMemory[size: %s, address: %s]", size, startRange) : String.format("HeapSafeMemory[size: %s, address: %s]", size, startRange); 
+		}
+
+		/**
+		 * Returns the underlying ByteBuffer for this allocation 
+		 * @return the underlying ByteBuffer
+		 */
+		ByteBuffer getBlock() {
+			return block;
+		}
+
+		/**
+		 * Destroys this allocation
+		 */
+		void destroy() {
+			if(block instanceof DirectBuffer) {
+				Cleaner cleaner = ((DirectBuffer)block).cleaner();
+				if(cleaner!=null) cleaner.clean();
+				// leave the accounting for the RefQueue processor
+			}
+		}
+
+	}
+
+	
 	
 	static class LongArrayMapKey {
 		/** The long array serving as the key */
@@ -445,26 +542,7 @@ public class SafeMemoryAllocator implements Runnable {
 		 */
 		@Override
 		public int compareTo(Range v) {
-//			if(v.endRange==-1L && endRange==-1L) {
-//				return startRange==v.startRange ? 0 : startRange<v.startRange ? -1 : 1; 
-//			}
-//			if(v.endRange==-1) {
-//				return v.startRange>=startRange && v.startRange<=startRange ? 0 : v.startRange > startRange ? -1 : 1;
-//			}
-//			if(endRange==-1) {
-//				return startRange>=v.startRange && startRange<=v.startRange ? 0 : startRange < v.startRange ? -1 : 1; 
-//			}
-//			
-			
-			
-			
 			return v.startRange < startRange ? -1 : 1;
-//			if(endRange==-1L) {
-//				if(v.startRange == startRange) return 0;
-//				return startRange < v.startRange ? -1 : 1;
-//			}
-//			if(v.startRange>=startRange && v.startRange<=endRange) return 0;
-//			return v.startRange < startRange ? -1 : 1;
 		}
 
 		/**
@@ -478,9 +556,6 @@ public class SafeMemoryAllocator implements Runnable {
 			result = prime * result + (int) (startRange ^ (startRange >>> 32));
 			return -1;
 		}
-
-
-
 
 		/**
 		 * {@inheritDoc}
@@ -502,104 +577,15 @@ public class SafeMemoryAllocator implements Runnable {
 			if(endRange==-1) {
 				return startRange >= v.startRange && startRange <= v.endRange; 
 			}
-//			if(v.endRange==-1L && endRange==-1L) {
-//			return startRange==v.startRange ? 0 : startRange<v.startRange ? -1 : 1; 
-//		}
-//		if(v.endRange==-1) {
-//			return v.startRange>=startRange && v.startRange<=startRange ? 0 : v.startRange > startRange ? -1 : 1;
-//		}
-//		if(endRange==-1) {
-//			return startRange>=v.startRange && startRange<=v.startRange ? 0 : startRange < v.startRange ? -1 : 1; 
-//		}
-			
 			if (endRange != v.endRange)
 				return false;
 			if (startRange != v.startRange)
 				return false;
 			return true;
 		}
-		
-		
-		
 	}
 	
-	/**
-	 * <p>Title: SafeMemoryAllocation</p>
-	 * <p>Description: A memory allocation class intended to mimic dirct unsafe allocations in safe memory.</p> 
-	 * <p>Company: Helios Development Group LLC</p>
-	 * @author Whitehead (nwhitehead AT heliosdev DOT org)
-	 * <p><code>com.heliosapm.unsafe.SafeMemoryAllocator.SafeMemoryAllocation</code></p>
-	 */
-	static class SafeMemoryAllocation {
-		/** The allocated block of memory */
-		final ByteBuffer block;
-		/** The size of the block */
-		final long size;
-		/** The alignment overhead */
-		final long alignmentOverhead;		
-		/** The notional address of the memory block */
-		final long startRange;
-		/** The notional end address of the memory block */
-		final long endRange;
-		/** The search range */
-		final Range range;
-		
-		
-		
-		/**
-		 * Creates a new SafeMemoryAllocation
-		 * @param size The size of the allocation in bytes
-		 * @param alignmentOverhead The size of the alignment overhead
-		 * @param onHeap true for on heap memory, false for direct
-		 */
-		SafeMemoryAllocation(long size, long alignmentOverhead, boolean onHeap) {
-			if(size > Integer.MAX_VALUE || size < 1) throw new IllegalArgumentException("Invalid Safe Memory Size [" + size + "]", new Throwable());
-			this.size = size;
-			this.alignmentOverhead = alignmentOverhead;
-			block = onHeap ? ByteBuffer.allocate((int)size) : ByteBuffer.allocateDirect((int)size);
-			startRange = UnsafeAdapter.getAddressOf(block);
-			endRange = startRange + size;
-			range = Range.range(startRange, endRange);
-		}
-		
-		/**
-		 * Creates a new SafeMemoryAllocation with zero allocation overhead
-		 * @param size The size of the allocation in bytes
-		 * @param onHeap true for on heap memory, false for direct
-		 */
-		SafeMemoryAllocation(long size, boolean onHeap) {
-			this(size, 0L, onHeap);
-		}
-		
-
-		/**
-		 * {@inheritDoc}
-		 * @see java.lang.Object#toString()
-		 */
-		public String toString() {
-			return block.isDirect() ? String.format("DirectSafeMemory[size: %s, address: %s]", size, startRange) : String.format("HeapSafeMemory[size: %s, address: %s]", size, startRange); 
-		}
-
-		/**
-		 * Returns the underlying ByteBuffer for this allocation 
-		 * @return the underlying ByteBuffer
-		 */
-		ByteBuffer getBlock() {
-			return block;
-		}
-		
-		/**
-		 * Destroys this allocation
-		 */
-		void destroy() {
-			if(block instanceof DirectBuffer) {
-				Cleaner cleaner = ((DirectBuffer)block).cleaner();
-				if(cleaner!=null) cleaner.clean();
-				// leave the accounting for the RefQueue processor
-			}
-		}
-		
-	}
+	
 }
 
 
@@ -771,4 +757,3 @@ public class SafeMemoryAllocator implements Runnable {
 //	
 
 
-*/

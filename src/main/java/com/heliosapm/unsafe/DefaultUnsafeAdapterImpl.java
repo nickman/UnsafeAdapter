@@ -110,10 +110,6 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	/** The reference cleaner thread */
 	Thread cleanerThread;
 	
-	/** The max 32bit memory size that can be cache-line aligned */
-	public static final int MAX_ALIGNED_MEM_32 = 1073741824;
-	/** The max 64bit memory size that can be cache-line aligned */
-	public static final long MAX_ALIGNED_MEM_64 = 4611686018427387904L;
 	
 		
 	static {
@@ -357,10 +353,10 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
      */
     public static long findNextPositivePowerOfTwo(final long value) {
     	if(UnsafeAdapter.ADDRESS_SIZE==4) {
-        	if(value > MAX_ALIGNED_MEM_32) return value;
+        	if(value > UnsafeAdapter.MAX_ALIGNED_MEM_32) return value;
         	return  1 << (32 - Integer.numberOfLeadingZeros((int)value - 1));    		
     	}
-    	if(value > MAX_ALIGNED_MEM_64) return value;
+    	if(value > UnsafeAdapter.MAX_ALIGNED_MEM_64) return value;
     	return  1 << (64 - Long.numberOfLeadingZeros(value - 1));    		
 	}    
     
@@ -1052,41 +1048,6 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 		return UNSAFE.getObjectVolatile(null, address);
 	}
 	
-	//===========================================================================================================
-	//	Object Write Ops
-	//===========================================================================================================		
-	
-	/**
-	 * Stores a value to a given memory address.  If the address is zero, or
-	 * does not point to a block obtained from #allocateMemory , the
-	 * results are undefined.
-	 * @param address the address to write to
-	 * @param value The value to write
-	 * @see sun.misc.Unsafe#putObject(java.lang.Object, long, java.lang.Object)
-	 */
-	public void putObject(long address, Object value) {
-		UNSAFE.putObject(null, address, value);
-	}
-	
-	/**
-	 * Volatile version of {@link #putObject(long, Object)}
-	 * @param address The address to write to
-	 * @param value The value to write
-	 * @see sun.misc.Unsafe#putObjectVolatile(java.lang.Object, long, Object)
-	 */
-	public void putObjectVolatile(long address, Object value) {
-		UNSAFE.putObjectVolatile(null, address, value);
-	}
-	
-	/**
-	 * Ordered version of {@link #putObject(long, Object)}
-	 * @param address The address to write to
-	 * @param object The object to write
-	 * @see sun.misc.Unsafe#putOrderedObject(java.lang.Object, long, java.lang.Object)
-	 */
-	public void putOrderedObject(long address, Object object) {
-		UNSAFE.putOrderedObject(null, address, object);
-	}
 
 
 
