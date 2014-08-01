@@ -681,7 +681,7 @@ public class BasicAllocationsTest extends BaseTest {
 			log("MemoryBean State After Alloc: %s", UnsafeAdapter.getMemoryMBean().getState());
 			dealloc = null;
 			System.gc();
-			sleep(10000);
+			sleep(100);
 			log("MemoryBean State After Clear: %s", UnsafeAdapter.getMemoryMBean().getState());
 			if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
 				Assert.assertEquals("Mem Total Alloc was unexpected", 0, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());

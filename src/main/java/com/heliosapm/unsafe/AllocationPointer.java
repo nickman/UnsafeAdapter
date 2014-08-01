@@ -2,7 +2,7 @@
  * Helios, OpenSource Monitoring
  * Brought to you by the Helios Development Group
  *
- * Copyright 2007, Helios Development Group and individual contributors
+ * Copyright 2014, Helios Development Group and individual contributors
  * as indicated by the @author tags. See the copyright.txt file in the
  * distribution for a full listing of individual contributors.
  *
@@ -24,162 +24,172 @@
  */
 package com.heliosapm.unsafe;
 
-import sun.misc.Unsafe;
-import static com.heliosapm.unsafe.UnsafeAdapter.*;
+import java.lang.ref.PhantomReference;
+import java.lang.ref.ReferenceQueue;
 
 /**
  * <p>Title: AllocationPointer</p>
- * <p>Description: Static methods for maniplulating an unsafe memory block containing an 
- * array of memory block addresses allocated for a common purpose 
- * and which will be deallocated when the referencing object becomes phantom reachable.</p> 
+ * <p>Description: A container for managing deallocatable memory block addresses</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>com.heliosapm.unsafe.AllocationPointer</code></p>
  */
 
-public class AllocationPointer {
-	/** A reference to the Unsafe */
-	private static final Unsafe unsafe = theUNSAFE;
-	
-	/** A zero byte const */
-	public static final byte ZERO_BYTE = 0;
-	
-	/** 
-	 * The size of the buffer expressed as the number of adress slots 
-	 * (not including the initial slots for the capacity and size) 
-	 */
-	public static final int ALLOC_SIZE = 7;
-	
-	/** The size of the memory block header in bytes (2 ints) */
-	public static final int HEADER_SIZE = 8;
-	
-	/** 
-	 * The size of the buffer expressed as the number of allocated bytes
-	 * (not including the initial 8 bytes for the capacity and size) 
-	 */
-	public static final int ALLOC_MEM_SIZE = ALLOC_SIZE * ADDRESS_SIZE;
-	
-	
+public class AllocationPointer implements PhantomReferenceProvider<AllocationPointer> {
+	/** The address of the memory block allocated for this AllocationPointer */
+	private final long[] _address = new long[1];
+	/** The phantom reference to this allocation pointer if one has been requested */
+	private PhantomReference<AllocationPointer> phantomRef = null;
 	
 	/**
-	 * Allocates a new AllocationPointer.
-	 * @return the address of the created memory block. 
+	 * Creates a new AllocationPointer with the default capacity ({@link AllocationPointerOperations#ALLOC_SIZE})
 	 */
-	public static long newAllocationPointer() {
-		long address = unsafe.allocateMemory(ALLOC_SIZE * ADDRESS_SIZE + 8);
-		unsafe.putInt(address, ALLOC_SIZE);
-		unsafe.putInt(address + 4, 0);
-		unsafe.setMemory(address + 8, ALLOC_MEM_SIZE, ZERO_BYTE);
-		return address;
+	public AllocationPointer() {
+		_address[0] = AllocationPointerOperations.newAllocationPointer();
 	}
 	
-	public static int assignSlot(final long address, final long newAddress) {
-		if(isFull(address)) {
-			extend();
+	/**
+	 * Creates a new AllocationPointer and loads the passed address.
+	 * @param address The address to load into this AllocationPointer.
+	 */
+	public AllocationPointer(long address) {
+		this();
+		if(address>0) {
+			assignSlot(address);
+		}		
+	}
+	
+	/**
+	 * Creates a new AllocationPointer and loads the passed addresses.
+	 * @param addresses The addresses to load into this AllocationPointer.
+	 */
+	public AllocationPointer(long[] addresses) {
+		this();
+		if(addresses!=null) {
+			for(long address: addresses) {
+				if(address>0) {
+					assignSlot(address);
+				}
+			}
 		}
-		int nextIndex = incrementSize(address);
-		unsafe.putAddress(address + HEADER_SIZE + (nextIndex * ADDRESS_SIZE), newAddress);
-		return nextIndex;
+	
+	}	
+	
+	/**
+	 * Assigns the passed address to the next available slot
+	 * @param newAddress The address to assign to the next slot
+	 * @return the index of the slot the address was inserted into
+	 */
+	public final int assignSlot(final long newAddress) {
+		_address[0] = AllocationPointerOperations.assignSlot(_address[0], newAddress);
+		return AllocationPointerOperations.getLastIndex(_address[0]);
 	}
 	
 	/**
-	 * Returns the number of populated address slots in the AllocationPointer 
-	 * resident at the passed memory address
-	 * @param address the memory address of the AllocationPointer
+	 * Assigns the passed address to an existing slot
+	 * @param newAddress The address to assign to the next slot
+	 * @param index The index of the slot to write the address to
+	 */
+	public final void reassignSlot(final long newAddress, final int index) {
+		AllocationPointerOperations.reassignSlot(_address[0], newAddress, index);
+	}
+	
+	/**
+	 * Returns the slotted addresses as an array of longs
+	 * @return an array of addresses
+	 */
+	public final long[] getAddresses() {
+		return AllocationPointerOperations.getAddresses(_address[0]);
+	}
+	
+	/**
+	 * Returns the number of populated address slots 
 	 * @return the number of populated slots
 	 */
-	public static int getSize(final long address) {
-		return unsafe.getInt(address + 4);
+	public final int getSize() {
+		return AllocationPointerOperations.getSize(_address[0]);
 	}
 	
 	/**
-	 * Returns the address slot capacity of AllocationPointer 
-	 * resident at the passed memory address
-	 * @param address the memory address of the AllocationPointer
+	 * Returns the address slot capacity 
 	 * @return the number of allocated slots
 	 */
-	public static int getCapacity(final long address) {
-		return unsafe.getInt(address);
+	public final int getCapacity() {
+		return AllocationPointerOperations.getCapacity(_address[0]);
 	}
 	
 	/**
-	 * Determines if the AllocationPointer resident at the passed memory address is full.
+	 * Returns the index of the most recently assigned address slot, or -1 if none are assigned
+	 * @return the index of the most recently assigned address slot
+	 */
+	public final int getLastIndex() {
+		return AllocationPointerOperations.getLastIndex(_address[0]);
+	}
+	
+	/**
+	 * Determines if the address slots are full.
 	 * i.e. if the size equals the capacity.
-	 * @param address the memory address of the AllocationPointer
 	 * @return true if full, false otherwise
 	 */
-	public static boolean isFull(final long address) {
-		return getSize(address) == getCapacity(address);
+	public final boolean isFull() {
+		return AllocationPointerOperations.isFull(_address[0]);
 	}
 	
 	/**
-	 * Returns the address at the specified index in the addressed AllocationPointer
-	 * @param address the memory address of the AllocationPointer
-	 * @param index the index of the AllocationPointer's address slots to retrieve
-	 * @return the address as the specified index
+	 * Returns the address at the specified index slot
+	 * @param index the index of the slot to read the address from
+	 * @return the address at the specified index
 	 */
-	public static long getAddress(final long address, final int index) {
-		if(index < 0) throw new IllegalArgumentException("Invalid index: [" + index + "]");
-		final int size = getSize(address);
-		if(index > (size-1)) throw new IllegalArgumentException("Invalid index: [" + index + "]");
-		return unsafe.getAddress(address + HEADER_SIZE + (index * ADDRESS_SIZE));
+	public final long getAddress(final int index) {
+		return AllocationPointerOperations.getAddress(_address[0], index);
 	}
 	
+	
+	
 	/**
-	 * Prints the summary state of this AllocationPointer
-	 * @param address the memory address of the AllocationPointer
+	 * Returns the summary state of this AllocationPointer
 	 * @return a string describing the status of the AllocationPointer
 	 */
-	public static String print(final long address) {
-		return String.format("AllocationPointer [size: %s, capacity: %s]", getSize(address), getCapacity(address));
+	public final String toString() {
+		return AllocationPointerOperations.print(_address[0]);
 	}
 	
 	/**
-	 * Dumps the detailed state of this AllocationPointer
-	 * @param address the memory address of the AllocationPointer
-	 * @return a string describing the status and contents of the AllocationPointer
+	 * Returns the detailed state of this AllocationPointer
+	 * @return a string outlining the summary and each of the addresses
 	 */
-	public static String dump(final long address) {
-		StringBuilder b = new StringBuilder(print(address));
-		b.append("\n\tAddresses: [");
-		final int size = getSize(address);
-		if(size>0) {
-			for(int i = 0; i < size; i++) {
-				b.append(getAddress(address, i)).append(", ");
-			}			
-			b.deleteCharAt(b.length()-1);
-			b.deleteCharAt(b.length()-1);
+	public final String dump() {
+		return AllocationPointerOperations.dump(_address[0]);
+	}
+	
+	
+	/**
+	 * Frees all memory allocated within this AllocationPointer
+	 */
+	public final void free() {
+		AllocationPointerOperations.free(_address[0]);
+	}
+	
+	
+	/**
+	 * Returns the total byte size of this AllocationPointer
+	 * @return the total byte size of this AllocationPointer
+	 */
+	public final long getByteSize() {
+		return AllocationPointerOperations.getEndOffset(_address[0]);
+	}
+	
+	
+	/**
+	 * Acquires a phantom reference to this AllocationPointer
+	 * @param refQueue The reference queue the phantom reference will be registered with
+	 * @return the phantom reference
+	 */
+	public final synchronized PhantomReference<AllocationPointer> getPhantomReference(ReferenceQueue<? super AllocationPointer> refQueue) {
+		if(phantomRef==null) {
+			phantomRef = new AllocationPointerPhantomRef(this, _address, refQueue);
 		}
-		return b.append("]").toString();
+		return phantomRef;
 	}
-	
-	
-	/**
-	 * Increments the size of the AllocationPointer to represent an added address.
-	 * @param address The address of the AllocationPointer
-	 * @return the index of the next open slot
-	 */
-	public static int incrementSize(final long address) {
-		int nextSize = getSize(address); 
-		unsafe.putInt(address + 4, nextSize + 1);
-		return nextSize;
-	}
-	
-	public static long getEndAddress(final long address) {
-		final int size = getSize(address);
-		return address + HEADER_SIZE + (size * ADDRESS_SIZE);
-	}
-	
-	public static long getEndOffset(final long address) {
-		return getEndAddress(address) - address;
-	}
-	
-	public static long extend() {
-		
-		
-		return -1;
-	}
-	
-	private AllocationPointer() {}
 
 }

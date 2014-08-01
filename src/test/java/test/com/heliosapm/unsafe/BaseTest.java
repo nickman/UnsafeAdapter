@@ -198,6 +198,15 @@ public class BaseTest {
 		}
 	}
 
+	/**
+	 * Runs {@link Thread#yield()} in a loop
+	 * @param loops the number of loops
+	 */
+	protected static void yield(final int loops) {
+		for(int i = 0; i < loops; i++) {
+			Thread.yield();
+		}
+	}
 	
 	
 	/**

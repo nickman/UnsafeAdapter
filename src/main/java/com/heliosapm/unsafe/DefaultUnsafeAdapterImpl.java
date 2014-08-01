@@ -152,6 +152,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 				JMXHelper.unregisterMBean(UnsafeAdapter.UNSAFE_MEM_OBJECT_NAME);
 				Field instanceField = ReflectionHelper.setFieldEditable(getClass(), "instance");
 				instanceField.set(null, null);
+				if(cleanerThread!=null) cleanerThread.interrupt(); 
 			}
 		} catch (Throwable t) {
 			loge("Failed to reset UnsafeAdapter", t);
@@ -245,9 +246,11 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 			} catch (Exception e) {
 				loge("Unexpected exception [%s] in cleaner loop. Will Continue.", e);
 			}
-		}			
+		}
+		cleanerThread = null;
 		log("Unsafe Cleaner Thread [%s] Terminated", Thread.currentThread().getName());
 		UnsafeAdapter.removeCleanerThread(Thread.currentThread());
+		
 	}
 	
 	/**
