@@ -25,10 +25,9 @@
 package com.heliosapm.unsafe;
 
 import java.lang.management.ManagementFactory;
-import java.lang.ref.PhantomReference;
+import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.reflect.Field;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +36,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
 
 import sun.misc.Unsafe;
+
+
 
 /**
  * <p>Title: DefaultUnsafeAdapterImpl</p>
@@ -75,7 +76,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
     /** Empty long[] array const */
     private static final long[][] EMPTY_ADDRESSES = {{}};
     /** A map of memory allocation references keyed by an internal counter */
-    protected static final NonBlockingHashMapLong<MemoryAllocationReference> deAllocs = new NonBlockingHashMapLong<MemoryAllocationReference>(1024, false);
+    protected static final NonBlockingHashMapLong<AllocationPointer> deAllocs = new NonBlockingHashMapLong<AllocationPointer>(1024, false);
 	/** Serial number factory for cleaner threads */
 	private static final AtomicLong cleanerSerial = new AtomicLong(0L);
 	
@@ -105,7 +106,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	private volatile Object queueLengthFieldLock;
 	
 	/** The reference queue where collected allocations go */
-	final ReferenceQueue<? super DeAllocateMe> refQueue;
+	final ReferenceQueue<?> refQueue;
 	/** The reference cleaner thread */
 	Thread cleanerThread;
 	
@@ -231,10 +232,10 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 		boolean terminating = false;
 		while(true) {
 			try {
-				MemoryAllocationReference ref = (MemoryAllocationReference)refQueue.remove();
+				Reference<?> ref = refQueue.remove();
 				log("Dequeued Reference [%s]", ref);
-				if(ref!=null) {
-					ref.close();
+				if(ref!=null) { xx
+					ref.clear();
 				}
 				if(terminating) {
 					if(getRefQueuePending()<1 && getPendingRefs()<1 ) break;
@@ -376,13 +377,15 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
     		long[][] addresses = deallocator.getAddresses();
     		if(addresses!=null && addresses.length>0) {
     			new MemoryAllocationReference(deallocator);
-        		if(deallocator instanceof AssignableDeAllocateMe) {
-        			((AssignableDeAllocateMe)deallocator).setAllocated(address);
+        		if(deallocator instanceof AddressAssignable) {
+        			((AddressAssignable)deallocator).setAllocated(address);
         		}    			
     		}
     	}		
 		return address;
 	}
+	
+	
 	
 	/**
 	 * Resizes a new block of native memory, to the given size in bytes.
@@ -1073,64 +1076,6 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 		}
 	}
 	
-    /**
-     * <p>Title: MemoryAllocationReference</p>
-     * <p>Description: A phantom reference extension for tracking memory allocations without preventing them from being enqueued for de-allocation</p> 
-     * <p>Company: Helios Development Group LLC</p>
-     * @author Whitehead (nwhitehead AT heliosdev DOT org)
-     * <p><code>com.heliosapm.unsafe.DefaultUnsafeAdapterImpl.MemoryAllocationReference</code></p>
-     */
-    class MemoryAllocationReference extends PhantomReference<DeAllocateMe> {
-    	/** The index of this reference */
-    	private final long index = refIndexFactory.incrementAndGet();
-    	/** The memory addresses owned by this reference */
-    	private final long[][] addresses;
-    	
-		/**
-		 * Creates a new MemoryAllocationReference
-		 * @param referent the memory address holder
-		 */
-		public MemoryAllocationReference(DeAllocateMe referent) {
-			super(referent, refQueue);
-			addresses = referent==null ? EMPTY_ADDRESSES : referent.getAddresses();
-			deAllocs.put(index, this);
-			referent = null;
-		}    	
-		
-		
-		
-		/**
-		 * Deallocates the referenced memory blocks 
-		 */
-		public void close() {
-			for(long[] address: addresses) {
-				if(address[0]>0) {
-					freeMemory(address[0]);
-					address[0] = 0L;
-				}
-				log("Freed memory at address [%s]", address[0]);
-				deAllocs.remove(index);
-			}
-			super.clear();
-		}
-
-
-
-		/**
-		 * {@inheritDoc}
-		 * @see java.lang.Object#toString()
-		 */
-		@Override
-		public String toString() {
-			StringBuilder builder = new StringBuilder();
-			builder.append("MemoryAllocationReference [index=");
-			builder.append(index);
-			builder.append(", addresses=");
-			builder.append(addresses != null ? Arrays.deepToString(addresses) : "[]");					
-			builder.append("]");
-			return builder.toString();
-		}
-    }
     
 	//===========================================================================================================
 	//	MemoryMBean Implementation

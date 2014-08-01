@@ -1,5 +1,7 @@
 package com.heliosapm.unsafe;
 
+import java.lang.management.ManagementFactory;
+
 /**
  * <p>Title: SpinLock</p>
  * <p>Description: Defines a sping lock impl.</p> 
@@ -8,6 +10,12 @@ package com.heliosapm.unsafe;
  * <p><code>com.heliosapm.unsafe.UnsafeAdapterSpinLock</code></p>
  */
 public interface SpinLock {
+	
+	/** The JVM PID */
+	public static final long JVM_PID = Long.parseLong(ManagementFactory.getRuntimeMXBean().getName().split("@")[0]);
+	/** The token for a no lock */
+	public static final long NO_LOCK = -1L;
+	
 	/**
 	 * Acquires the lock with the calling thread
 	 */

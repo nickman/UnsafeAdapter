@@ -26,17 +26,17 @@ package test.com.heliosapm.unsafe;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.heliosapm.unsafe.AssignableDeAllocateMe;
+import com.heliosapm.unsafe.AddressAssignable;
 
 /**
  * <p>Title: DefaultAssignableDeAllocateMe</p>
- * <p>Description: A default {@link AssignableDeAllocateMe} implementation. Not too useful, but helpful for testing or extending.</p> 
+ * <p>Description: A default {@link AddressAssignable} implementation. Not too useful, but helpful for testing or extending.</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>test.com.heliosapm.unsafe.DefaultAssignableDeAllocateMe</code></p>
  */
 
-public class DefaultAssignableDeAllocateMe implements AssignableDeAllocateMe {
+public class DefaultAssignableDeAllocateMe implements AddressAssignable {
 	/** The address slots */
 	private final long[][] addresses;
 	/** the assignment count */
@@ -61,7 +61,7 @@ public class DefaultAssignableDeAllocateMe implements AssignableDeAllocateMe {
 	
 	/**
 	 * {@inheritDoc}
-	 * @see com.heliosapm.unsafe.AssignableDeAllocateMe#setAllocated(long)
+	 * @see com.heliosapm.unsafe.AddressAssignable#setAllocated(long)
 	 */
 	@Override
 	public void setAllocated(long address) {

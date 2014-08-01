@@ -29,13 +29,14 @@ import java.lang.ref.ReferenceQueue;
 
 /**
  * <p>Title: AllocationPointer</p>
- * <p>Description: A container for managing deallocatable memory block addresses</p> 
+ * <p>Description: A container for managing deallocatable memory block addresses</p>
+ * <p><b>Decidedly not thread safe.</b></p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>com.heliosapm.unsafe.AllocationPointer</code></p>
  */
 
-public class AllocationPointer implements PhantomReferenceProvider<AllocationPointer> {
+public class AllocationPointer implements ReferenceProvider<AllocationPointer>, DeAllocateMe {
 	/** The address of the memory block allocated for this AllocationPointer */
 	private final long[] _address = new long[1];
 	/** The phantom reference to this allocation pointer if one has been requested */
@@ -185,7 +186,7 @@ public class AllocationPointer implements PhantomReferenceProvider<AllocationPoi
 	 * @param refQueue The reference queue the phantom reference will be registered with
 	 * @return the phantom reference
 	 */
-	public final synchronized PhantomReference<AllocationPointer> getPhantomReference(ReferenceQueue<? super AllocationPointer> refQueue) {
+	public final synchronized PhantomReference<AllocationPointer> getReference(ReferenceQueue<? super AllocationPointer> refQueue) {
 		if(phantomRef==null) {
 			phantomRef = new AllocationPointerPhantomRef(this, _address, refQueue);
 		}

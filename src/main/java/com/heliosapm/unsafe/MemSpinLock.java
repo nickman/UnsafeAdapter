@@ -5,20 +5,19 @@ package com.heliosapm.unsafe;
  * <p>Description: Unsafe memory based spin lock for use withing JVM only</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
- * <p><code>com.heliosapm.unsafe.UnsafeAdapterOld.MemSpinLock</code></p>
+ * <p><code>com.heliosapm.unsafe.UnsafeAdapter.MemSpinLock</code></p>
  */
 
 public class MemSpinLock implements SpinLock, DeAllocateMe {
 	/** The lock address */
-	protected final long address;
+	protected final long[] address;
 
 	/**
 	 * Creates a new MemSpinLock
 	 * @param address The address of the lock
 	 */
 	MemSpinLock(long address) {
-		this.address = address;
-		UnsafeAdapterOld.registerForDeAlloc(this);
+		this.address = new long[]{UnsafeAdapter.allocateMemory(UnsafeAdapter.LONG_SIZE, this)};		
 	}
 
 	/**
@@ -26,15 +25,15 @@ public class MemSpinLock implements SpinLock, DeAllocateMe {
 	 * @return the lock address
 	 */
 	public long address() {
-		return address;
+		return address[0];
 	}
 	/**
 	 * {@inheritDoc}
 	 * @see com.heliosapm.unsafe.DeAllocateMe#getAddresses()
 	 */
 	@Override
-	public long[][] getAddresses() {
-		return new long[][] {{address}};
+	public long[] getAddresses() {
+		return address;
 	}
 
 	/**
@@ -43,7 +42,7 @@ public class MemSpinLock implements SpinLock, DeAllocateMe {
 	 */
 	@Override
 	public void xlock() {
-		UnsafeAdapterOld.xlock(address);
+		UnsafeAdapter.xlock(address[0]);
 	}
 	
 	/**
@@ -52,7 +51,7 @@ public class MemSpinLock implements SpinLock, DeAllocateMe {
 	 */
 	@Override
 	public void xlock(boolean barge) {
-		UnsafeAdapterOld.xlock(address, barge);
+		UnsafeAdapter.xlock(address[0], barge);
 	}
 	
 	/**
@@ -61,7 +60,7 @@ public class MemSpinLock implements SpinLock, DeAllocateMe {
 	 */
 	@Override
 	public void xunlock() {
-		UnsafeAdapterOld.xunlock(address);
+		UnsafeAdapter.xunlock(address[0]);
 	}
 	
 	/**
@@ -70,7 +69,7 @@ public class MemSpinLock implements SpinLock, DeAllocateMe {
 	 */
 	@Override
 	public boolean isLocked() {
-		return UnsafeAdapterOld.xislocked(address);
+		return UnsafeAdapter.xislocked(address[0]);
 	}
 	
 	/**
@@ -79,7 +78,7 @@ public class MemSpinLock implements SpinLock, DeAllocateMe {
 	 */
 	@Override
 	public boolean isLockedByMe() {
-		return UnsafeAdapterOld.xislockedbyt(address);
+		return UnsafeAdapter.xislockedbyt(address[0]);
 	}
 
 }

@@ -2,6 +2,7 @@ package com.heliosapm.unsafe;
 
 import java.io.File;
 import java.io.RandomAccessFile;
+import java.lang.management.ManagementFactory;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 
@@ -10,15 +11,15 @@ import java.nio.channels.FileChannel;
 	 * <p>Description: Disk based spin lock that is sharable with other processes</p> 
 	 * <p>Company: Helios Development Group LLC</p>
 	 * @author Whitehead (nwhitehead AT heliosdev DOT org)
-	 * <p><code>com.heliosapm.unsafe.UnsafeAdapterOld.DiskSpinLock</code></p>
-	 * FIXME: 
+	 * <p><code>com.heliosapm.unsafe.UnsafeAdapter.DiskSpinLock</code></p>
+	 * FIXME: INCOMPLETE
 	 */
 
 	public class DiskSpinLock implements SpinLock, DeAllocateMe {
 		/** The lock file name */
 		protected final File diskFile;
 		/** The mapped lock file address */
-		protected final long address;
+		protected final long[] address = new long[1];
 		/**
 		 * Creates a new MemSpinLock
 		 * @param address The address of the lock
@@ -28,8 +29,8 @@ import java.nio.channels.FileChannel;
 				diskFile = File.createTempFile("DiskSpinLock", ".spinlock");
 				diskFile.deleteOnExit();
 				FileChannel fc = new RandomAccessFile(diskFile, "rw").getChannel();
-				MappedByteBuffer mbb = fc.map(FileChannel.MapMode.READ_WRITE, 0, UnsafeAdapterOld.LONG_SIZE * 2);
-				address =  ((sun.nio.ch.DirectBuffer) mbb).address();
+				MappedByteBuffer mbb = fc.map(FileChannel.MapMode.READ_WRITE, 0, UnsafeAdapter.LONG_SIZE * 2);
+				address[0] =  ((sun.nio.ch.DirectBuffer) mbb).address();
 			} catch (Exception ex) {
 				throw new RuntimeException("Failed to allocate disk lock", ex);
 			}
@@ -41,7 +42,7 @@ import java.nio.channels.FileChannel;
 		 * @return the lock address
 		 */
 		public long address() {
-			return address;
+			return address[0];
 		}
 		
 		/**
@@ -58,8 +59,8 @@ import java.nio.channels.FileChannel;
 		 * @see com.heliosapm.unsafe.DeAllocateMe#getAddresses()
 		 */
 		@Override
-		public long[][] getAddresses() {
-			return new long[][] {{address}};
+		public long[] getAddresses() {
+			return address;
 		}
 
 		/**
@@ -70,6 +71,7 @@ import java.nio.channels.FileChannel;
 			xlock(false);
 		}
 		
+		
 /**
 		 * {@inheritDoc}
 		 * @see com.heliosapm.unsafe.SpinLock#xlock(boolean)
@@ -77,8 +79,8 @@ import java.nio.channels.FileChannel;
 		@Override
 		public void xlock(boolean barge) {
 			final long tId = Thread.currentThread().getId();
-			while(!UnsafeAdapterOld.compareAndSwapLong(null, address, UnsafeAdapterOld.NO_LOCK, UnsafeAdapterOld.JVM_PID)) { if(!barge) Thread.yield(); }
-			while(!UnsafeAdapterOld.compareAndSwapLong(null, address + UnsafeAdapterOld.LONG_SIZE, UnsafeAdapterOld.NO_LOCK, tId)) { if(!barge) Thread.yield(); }
+			while(!UnsafeAdapter.compareAndSwapLong(null, address[0], NO_LOCK, JVM_PID)) { if(!barge) Thread.yield(); }
+			while(!UnsafeAdapter.compareAndSwapLong(null, address[0] + UnsafeAdapter.LONG_SIZE, NO_LOCK, tId)) { if(!barge) Thread.yield(); }
 		}		
 		
 		/**
@@ -87,9 +89,9 @@ import java.nio.channels.FileChannel;
 		@Override
 		public void xunlock() {
 			final long tId = Thread.currentThread().getId();
-			if(UnsafeAdapterOld.getLong(address)==UnsafeAdapterOld.JVM_PID  &&  UnsafeAdapterOld.getLong(address + UnsafeAdapterOld.LONG_SIZE)==tId) {
-				UnsafeAdapterOld.compareAndSwapLong(null, address + UnsafeAdapterOld.LONG_SIZE, tId, UnsafeAdapterOld.NO_LOCK);
-				UnsafeAdapterOld.compareAndSwapLong(null, address, UnsafeAdapterOld.JVM_PID, UnsafeAdapterOld.NO_LOCK);
+			if(UnsafeAdapter.getLong(address[0])==JVM_PID  &&  UnsafeAdapter.getLong(address[0] + UnsafeAdapter.LONG_SIZE)==tId) {
+				UnsafeAdapter.compareAndSwapLong(null, address[0] + UnsafeAdapter.LONG_SIZE, tId, NO_LOCK);
+				UnsafeAdapter.compareAndSwapLong(null, address[0], JVM_PID, NO_LOCK);
 			}
 		}
 

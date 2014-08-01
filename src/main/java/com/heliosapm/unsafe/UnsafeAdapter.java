@@ -32,7 +32,7 @@ import javax.management.ObjectName;
 
 import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
 
-import com.heliosapm.unsafe.DefaultUnsafeAdapterImpl.MemoryAllocationReference;
+
 
 import sun.misc.Unsafe;
 
@@ -63,6 +63,19 @@ public class UnsafeAdapter {
     public static final boolean FOUR_SET;	
     /** The address size */
     public static final int ADDRESS_SIZE;
+    /** The byte size of a <b><code>short</code></b> */
+    public static final int SHORT_SIZE = 2;
+    /** The byte size of a <b><code>char</code></b> */
+    public static final int CHAR_SIZE = 2;    
+    /** The byte size of a <b><code>int</code></b> */
+    public static final int INT_SIZE = 4;
+    /** The byte size of a <b><code>float</code></b> */
+    public static final int FLOAT_SIZE = 4;
+    /** The byte size of a <b><code>double</code></b> */
+    public static final int DOUBLE_SIZE = 8;    
+    /** The byte size of a <b><code>long</code></b> */
+    public static final int LONG_SIZE = 8;
+    
     /** Byte array offset */
     public static final int BYTES_OFFSET;
     /** Object array offset */
@@ -2056,6 +2069,77 @@ public class UnsafeAdapter {
 	
 	
 	// =======================================================================================================
+	//			SpinLock Ops
+	// =======================================================================================================	
+	
+	
+	
+	/**
+	 * Allocates an initialized and initially unlocked memory based spin lock
+	 * @return the spin lock
+	 */
+	public static final SpinLock allocateSpinLock() {
+		long address = allocateAlignedMemory(UnsafeAdapter.LONG_SIZE);
+		putLong(address, SpinLock.NO_LOCK);
+		return new MemSpinLock(address);
+	}
+	
+	/**
+	 * Acquires the lock at the passed address exclusively
+	 * @param address The address of the lock
+	 * @param barge If true, does not yield between locking attempts. Should only be used by 
+	 * a small number of high priority threads, otherwise has no effect.  
+	 * @return true if the lock was acquired, false if it was already held by the calling thread
+	 */
+	public static final boolean xlock(final long address, final boolean barge) {
+		final long tId = Thread.currentThread().getId();
+		if(getLong(address)==tId) return false;
+		while(!compareAndSwapLong(null, address, SpinLock.NO_LOCK, tId)) {if(!barge) Thread.yield();}
+		return true;
+	}
+	
+	/**
+	 * Indicates if the spin lock at the specified address is currently held by any thread
+	 * @param address The address of the spin lock
+	 * @return true if the spin lock at the specified address is currently held by any thread, false otherwise
+	 */
+	public static final boolean xislocked(final long address) {
+		return getLong(address)!=SpinLock.NO_LOCK;
+	}
+	
+	/**
+	 * Indicates if the spin lock at the specified address is held by the current thread
+	 * @param address The address of the spin lock
+	 * @return true if the spin lock at the specified address is held by the current thread, false otherwise
+	 */
+	public static final boolean xislockedbyt(final long address) {
+		final long tId = Thread.currentThread().getId();
+		return getLong(address)==tId;
+	}
+	
+	/**
+	 * Acquires the lock at the passed address exclusively with no barging
+	 * @param address The address of the lock
+	 * a small number of high priority threads, otherwise has no effect.  
+	 * @return true if the lock was acquired, false if it was already held by the calling thread
+	 */
+	public static final boolean xlock(final long address) {
+		return xlock(address, false);
+	}
+	
+	/**
+	 * Unlocks the exclusive lock at the passed address if it is held by the calling thread
+	 * @param address The address of the lock
+	 * @return true if the calling thread held the lock and unlocked it, false if the lock was not held by the calling thread
+	 */
+	public static final boolean xunlock(final long address) {
+		final long tId = Thread.currentThread().getId();
+		return compareAndSwapLong(null, address, tId, SpinLock.NO_LOCK);
+	}
+	
+	
+	// =======================================================================================================
+	
 	
 	/**
 	 * Returns a status and config summary for the Unsafe Adapter.

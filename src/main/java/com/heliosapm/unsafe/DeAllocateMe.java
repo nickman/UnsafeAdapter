@@ -17,7 +17,7 @@ public interface DeAllocateMe {
 	 * Returns the addresses to be deallocated
 	 * @return the addresses to be deallocated
 	 */
-	public long[][] getAddresses();
+	public long[] getAddresses();
 	
 	
 	

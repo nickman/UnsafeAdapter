@@ -87,7 +87,7 @@ public class SafeMemoryAllocator implements Runnable {
 	final Map<LongArrayMapKey, Map<Long, SafeMemoryAllocation>> allocationByLongArr = 
 				Collections.synchronizedMap(new WeakHashMap<LongArrayMapKey, Map<Long, SafeMemoryAllocation>>(1024));
 	/** The reference queue where collected allocations go */
-	final ReferenceQueue<? super SafeMemoryAllocation> refQueue;
+	final ReferenceQueue<? super DeAllocateMe> refQueue;
 	/** The reference cleaner thread */
 	Thread cleanerThread;
 	/** The total memory allocated */
@@ -118,7 +118,7 @@ public class SafeMemoryAllocator implements Runnable {
 	 */
 	private SafeMemoryAllocator() {
 		allocations = new ConcurrentHashMap<Range, SafeMemoryAllocationWeakReference>();
-		refQueue = new ReferenceQueue<SafeMemoryAllocation>();
+		refQueue = new ReferenceQueue<DeAllocateMe>();
 		cleanerThread = new Thread(this, "SafeMemoryAllocationCleaner#" + cleanerSerial.incrementAndGet());
 		alignMem = System.getProperties().containsKey(UnsafeAdapter.ALIGN_ALLOCS_PROP);
 		onHeap = System.getProperties().containsKey(UnsafeAdapter.SAFE_ALLOCS_ONHEAP_PROP);
@@ -316,7 +316,7 @@ public class SafeMemoryAllocator implements Runnable {
     	/** The index of this reference */
     	private final long index = refIndexFactory.incrementAndGet();
     	/** The memory addresses owned by this reference */
-    	private final long[][] addresses;
+    	private final long[] addresses;
     	/** The Range for the referent's allocation */
     	private final Range range;
 		
@@ -326,7 +326,7 @@ public class SafeMemoryAllocator implements Runnable {
 			this.range = range;
 			size = allocation.size * -1L;
 			alignmentOverhead = allocation.alignmentOverhead * -1L;
-			addresses = referent==null ? EMPTY_ADDRESSES : referent.getAddresses();
+			addresses = referent==null ? new long[0] : referent.getAddresses();
 		}
 
 		public SafeMemoryAllocationWeakReference(SafeMemoryAllocation allocation, Range range) {
@@ -584,6 +584,66 @@ public class SafeMemoryAllocator implements Runnable {
 			return true;
 		}
 	}
+	
+  /**
+  * <p>Title: MemoryAllocationReference</p>
+  * <p>Description: A phantom reference extension for tracking memory allocations without preventing them from being enqueued for de-allocation</p> 
+  * <p>Company: Helios Development Group LLC</p>
+  * @author Whitehead (nwhitehead AT heliosdev DOT org)
+  * <p><code>com.heliosapm.unsafe.DefaultUnsafeAdapterImpl.MemoryAllocationReference</code></p>
+  */
+ class MemoryAllocationReference extends PhantomReference<DeAllocateMe> {
+ 	/** The index of this reference */
+ 	private final long index = refIndexFactory.incrementAndGet();
+ 	/** The memory addresses owned by this reference */
+ 	private final long[][] addresses;
+ 	
+		/**
+		 * Creates a new MemoryAllocationReference
+		 * @param referent the memory address holder
+		 */
+		public MemoryAllocationReference(DeAllocateMe referent) {
+			super(referent, refQueue);
+			addresses = referent==null ? EMPTY_ADDRESSES : referent.getAddresses();
+			deAllocs.put(index, this);
+			referent = null;
+		}    	
+		
+		
+		
+		/**
+		 * Deallocates the referenced memory blocks 
+		 */
+		public void close() {
+			for(long[] address: addresses) {
+				if(address[0]>0) {
+					freeMemory(address[0]);
+					address[0] = 0L;
+				}
+				log("Freed memory at address [%s]", address[0]);
+				deAllocs.remove(index);
+			}
+			super.clear();
+		}
+
+
+
+		/**
+		 * {@inheritDoc}
+		 * @see java.lang.Object#toString()
+		 */
+		@Override
+		public String toString() {
+			StringBuilder builder = new StringBuilder();
+			builder.append("MemoryAllocationReference [index=");
+			builder.append(index);
+			builder.append(", addresses=");
+			builder.append(addresses != null ? Arrays.deepToString(addresses) : "[]");					
+			builder.append("]");
+			return builder.toString();
+		}
+ }
+	
 	
 	
 }

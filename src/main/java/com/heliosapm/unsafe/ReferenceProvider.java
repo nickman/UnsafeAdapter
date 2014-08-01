@@ -24,23 +24,23 @@
  */
 package com.heliosapm.unsafe;
 
-import java.lang.ref.PhantomReference;
+import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 
 /**
- * <p>Title: PhantomReferenceProvider</p>
- * <p>Description: Interface that defines an object as being to provide a {@link PhantomReference} to itself.</p> 
+ * <p>Title: ReferenceProvider</p>
+ * <p>Description: Interface that defines an object as being to provide a {@link Reference} to itself.</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
- * <p><code>com.heliosapm.unsafe.PhantomReferenceProvider</code></p>
+ * <p><code>com.heliosapm.unsafe.ReferenceProvider</code></p>
  * @param <T> The type of the phantom reference's referent and reference queue 
  */
 
-public interface PhantomReferenceProvider<T> {
+public interface ReferenceProvider<T> {
 	/**
 	 * Returns a phantom reference to this object
 	 * @param referenceQueue The reference queue the phantom reference will be constructed with
 	 * @return a phantom reference to this object
 	 */
-	public PhantomReference<? extends T> getPhantomReference(ReferenceQueue<? super T> referenceQueue);
+	public Reference<? extends T> getReference(ReferenceQueue<? super T> referenceQueue);
 }
