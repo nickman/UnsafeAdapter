@@ -28,6 +28,7 @@ import java.lang.management.ManagementFactory;
 import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.reflect.Field;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -230,6 +231,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 		while(true) {
 			try {
 				MemoryAllocationReference ref = (MemoryAllocationReference)refQueue.remove();
+				log("Dequeued Reference [%s]", ref);
 				if(ref!=null) {
 					ref.close();
 				}
@@ -259,6 +261,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 					try {
 						queueLengthFieldLock = queueLockField.get(refQueue);
 					} catch (Exception x) {
+						x.printStackTrace(System.err);
 						return -1L;
 					}					
 				}
@@ -266,9 +269,10 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 		}
 		try {
 			synchronized(queueLengthFieldLock) {
-				return queueLengthField.getInt(refQueue);
+				return queueLengthField.getLong(refQueue);
 			}
 		} catch (Exception x) {
+			x.printStackTrace(System.err);
 			return -1;
 		}
 	}
@@ -341,25 +345,12 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	 */
 	public long allocateAlignedMemory(long size, DeAllocateMe dealloc) {
 		if(alignMem) {
-			long alignedSize = UnsafeAdapter.ADDRESS_SIZE==4 ? findNextPositivePowerOfTwo((int)size) : findNextPositivePowerOfTwo((int)size);
+			long alignedSize = UnsafeAdapter.ADDRESS_SIZE==4 ? UnsafeAdapter.findNextPositivePowerOfTwo((int)size) : UnsafeAdapter.findNextPositivePowerOfTwo((int)size);
 			return _allocateMemory(alignedSize, alignedSize-size, dealloc);
 		}
 		return _allocateMemory(size, 0L, dealloc);		
 	}
 	
-    /**
-     * Finds the next <b><code>power of 2</code></b> higher or equal to than the passed value.
-     * @param value The initial value
-     * @return the next pow2 without overrunning the type size
-     */
-    public static long findNextPositivePowerOfTwo(final long value) {
-    	if(UnsafeAdapter.ADDRESS_SIZE==4) {
-        	if(value > UnsafeAdapter.MAX_ALIGNED_MEM_32) return value;
-        	return  1 << (32 - Integer.numberOfLeadingZeros((int)value - 1));    		
-    	}
-    	if(value > UnsafeAdapter.MAX_ALIGNED_MEM_64) return value;
-    	return  1 << (64 - Long.numberOfLeadingZeros(value - 1));    		
-	}    
     
 
 	/**
@@ -372,7 +363,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	 */
 	@SuppressWarnings("unused")
 	long _allocateMemory(long size, long alignmentOverhead, DeAllocateMe deallocator) {
-		long address = UNSAFE.allocateMemory(size);
+		final long address = UNSAFE.allocateMemory(size);
 		if(trackMem) {		
 			memoryAllocations.put(address, new long[]{size, alignmentOverhead});
 			totalMemoryAllocated.addAndGet(size);
@@ -380,8 +371,11 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 		}
     	if(deallocator!=null) {
     		long[][] addresses = deallocator.getAddresses();
-    		if(addresses==null || addresses.length==0) {
+    		if(addresses!=null && addresses.length>0) {
     			new MemoryAllocationReference(deallocator);
+        		if(deallocator instanceof AssignableDeAllocateMe) {
+        			((AssignableDeAllocateMe)deallocator).setAllocated(address);
+        		}    			
     		}
     	}		
 		return address;
@@ -413,7 +407,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	 */
 	public long reallocateAlignedMemory(long address, long size) {
 		if(alignMem) {
-			long actual = findNextPositivePowerOfTwo(size);
+			long actual = UnsafeAdapter.findNextPositivePowerOfTwo(size);
 			return _reallocateMemory(address, actual, actual-size);
 		} 
 		return _reallocateMemory(address, size, 0);
@@ -1093,11 +1087,14 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 		 * Creates a new MemoryAllocationReference
 		 * @param referent the memory address holder
 		 */
-		public MemoryAllocationReference(final DeAllocateMe referent) {
+		public MemoryAllocationReference(DeAllocateMe referent) {
 			super(referent, refQueue);
 			addresses = referent==null ? EMPTY_ADDRESSES : referent.getAddresses();
 			deAllocs.put(index, this);
+			referent = null;
 		}    	
+		
+		
 		
 		/**
 		 * Deallocates the referenced memory blocks 
@@ -1108,9 +1105,27 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 					freeMemory(address[0]);
 					address[0] = 0L;
 				}
+				log("Freed memory at address [%s]", address[0]);
 				deAllocs.remove(index);
 			}
 			super.clear();
+		}
+
+
+
+		/**
+		 * {@inheritDoc}
+		 * @see java.lang.Object#toString()
+		 */
+		@Override
+		public String toString() {
+			StringBuilder builder = new StringBuilder();
+			builder.append("MemoryAllocationReference [index=");
+			builder.append(index);
+			builder.append(", addresses=");
+			builder.append(addresses != null ? Arrays.deepToString(addresses) : "[]");					
+			builder.append("]");
+			return builder.toString();
 		}
     }
     

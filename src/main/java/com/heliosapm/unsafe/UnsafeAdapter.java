@@ -554,6 +554,21 @@ public class UnsafeAdapter {
 		return theUNSAFE.staticFieldBase(field);
 	}
 	
+    /**
+     * Finds the next <b><code>power of 2</code></b> higher or equal to than the passed value.
+     * @param value The initial value
+     * @return the next pow2 without overrunning the type size
+     */
+    public static long findNextPositivePowerOfTwo(final long value) {
+    	if(ADDRESS_SIZE==4) {
+        	if(value > MAX_ALIGNED_MEM_32) return value;
+        	return  1 << (32 - Integer.numberOfLeadingZeros((int)value - 1));    		
+    	}
+    	if(value > MAX_ALIGNED_MEM_64) return value;
+    	return  1 << (64 - Long.numberOfLeadingZeros(value - 1));    		
+	}    
+	
+	
 	//===========================================================================================================
 	//	Concurrency Control Ops
 	//===========================================================================================================	
@@ -2055,6 +2070,7 @@ public class UnsafeAdapter {
 		b.append("\n\tCPU Model: ").append(ADDRESS_SIZE==4 ? "32" : "64");
 		b.append("\n\tJVM 5 Copy: ").append(adapter==null ? "Unknown" : adapter.isFiveCopy() ? "Yes" : "No");
 		b.append("\n\tJVM 4 Set: ").append(adapter==null ? "Unknown" : adapter.isFourSet() ? "Yes" : "No");
+		b.append("\n\tCleaner Threads: ").append(cleanerThreads.toString());
 		return b.append("\n").toString();
 	}
 		

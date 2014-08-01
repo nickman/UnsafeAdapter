@@ -185,6 +185,18 @@ public class BaseTest {
 	protected static char nextCharacter() {
 		return (char)nextPosShort();		
 	}
+	
+	/**
+	 * Causes the calling thread to pause for the designated time in ms.
+	 * @param ms the pause time in ms.
+	 */
+	protected static void sleep(long ms) {
+		try {
+			Thread.currentThread().join(ms);
+		} catch (Exception ex) {
+			throw new RuntimeException(ex);
+		}
+	}
 
 	
 	

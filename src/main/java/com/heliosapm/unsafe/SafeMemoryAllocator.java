@@ -220,7 +220,7 @@ public class SafeMemoryAllocator implements Runnable {
 	 * @return the notional address of the block
 	 */
 	public long allocateAligned(long size) {
-		final long alignedSize = DefaultUnsafeAdapterImpl.findNextPositivePowerOfTwo(size);
+		final long alignedSize = UnsafeAdapter.findNextPositivePowerOfTwo(size);
 		final long alignmentOverhead = alignedSize-size;
 		SafeMemoryAllocation sma = new SafeMemoryAllocation(size, alignmentOverhead, onHeap);
 		Range range = sma.range();

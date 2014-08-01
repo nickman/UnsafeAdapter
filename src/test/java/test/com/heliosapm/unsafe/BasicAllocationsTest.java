@@ -62,7 +62,6 @@ public class BasicAllocationsTest extends BaseTest {
 	 * Tests a long allocation, write, read and deallocation
 	 * @throws Exception thrown on any error
 	 */
-	
 	@Test
 	public void testAllocatedLong() throws Exception {
 		final long address = UnsafeAdapter.allocateMemory(8);
@@ -413,7 +412,7 @@ public class BasicAllocationsTest extends BaseTest {
         public void testReallocatedByte() throws Exception {
             long address = -1;
             try {
-                address = UnsafeAdapter.allocateMemory(1);
+                address = UnsafeAdapter.allocateMemory(1);                
                 byte value = nextPosByte();
                 byte nextValue = nextPosByte();
                 UnsafeAdapter.putByte(address, value);
@@ -651,6 +650,49 @@ public class BasicAllocationsTest extends BaseTest {
         }
 
 	    
+    	/**
+    	 * Tests an auto de-allocated long memory allocation 
+    	 * @throws Exception thrown on any error
+    	 */
+    	@Test
+    	public void testAutoClearedAllocatedLong() throws Exception {
+			System.setProperty("unsafe.allocations.track", "true");
+			ReflectionHelper.invoke(UnsafeAdapter.class, "reset");
+			Assert.assertEquals("UnsafeAdapter is not in managed memory-tracking mode", true, UnsafeAdapter.getMemoryMBean().isTrackingEnabled());
+			Assert.assertFalse("Adapter was not set to unsafe", UnsafeAdapter.isSafeAdapter());		
+			Assert.assertTrue("Unsafe Adapter MBean Was Not Registered", JMXHelper.getDefaultMBeanServer().isRegistered(UnsafeAdapter.UNSAFE_MEM_OBJECT_NAME));
+			Assert.assertFalse("Safe Adapter MBean Was Registered", JMXHelper.getDefaultMBeanServer().isRegistered(UnsafeAdapter.SAFE_MEM_OBJECT_NAME));
+			log(UnsafeAdapter.printStatus());
+    		
+    		log("MemoryBean State At Start: %s", UnsafeAdapter.getMemoryMBean().getState());
+    		DefaultAssignableDeAllocateMe dealloc = new DefaultAssignableDeAllocateMe(1); 
+    		final long address = UnsafeAdapter.allocateMemory(8, dealloc);
+			long value = nextPosLong();
+			UnsafeAdapter.putLong(address, value);
+			Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getLong(address));
+			Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getLong(address));	
+			if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+				Assert.assertEquals("Mem Total Alloc was unexpected", 8, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+				Assert.assertEquals("Mem Total Allocation Count was unexpected", 1, UnsafeAdapter.getMemoryMBean().getTotalAllocationCount());
+			} else {
+				Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+				Assert.assertEquals("Mem Total Allocation Count was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocationCount());
+			}
+			log("MemoryBean State After Alloc: %s", UnsafeAdapter.getMemoryMBean().getState());
+			dealloc = null;
+			System.gc();
+			sleep(10000);
+			log("MemoryBean State After Clear: %s", UnsafeAdapter.getMemoryMBean().getState());
+			if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+				Assert.assertEquals("Mem Total Alloc was unexpected", 0, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+				Assert.assertEquals("Mem Total Allocation Count was unexpected", 0, UnsafeAdapter.getMemoryMBean().getTotalAllocationCount());
+				
+			} else {
+				Assert.assertEquals("Mem Total Alloc was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+				Assert.assertEquals("Mem Total Allocation Count was unexpected", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocationCount());
+			}
+			
+    	}
 	
 	
 }
