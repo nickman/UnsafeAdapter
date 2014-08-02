@@ -27,16 +27,17 @@ package test.com.heliosapm.unsafe;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.heliosapm.unsafe.AddressAssignable;
+import com.heliosapm.unsafe.Deallocatable;
 
 /**
  * <p>Title: DefaultAssignableDeAllocateMe</p>
- * <p>Description: A default {@link AddressAssignable} implementation. Not too useful, but helpful for testing or extending.</p> 
+ * <p>Description: A default {@link AddressAssignable} and {@link Deallocatable} implementation. Not too useful, but helpful for testing or extending.</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>test.com.heliosapm.unsafe.DefaultAssignableDeAllocateMe</code></p>
  */
 
-public class DefaultAssignableDeAllocateMe implements AddressAssignable {
+public class DefaultAssignableDeAllocateMe implements Deallocatable, AddressAssignable {
 	/** The address slots */
 	private final long[][] addresses;
 	/** the assignment count */
@@ -77,6 +78,27 @@ public class DefaultAssignableDeAllocateMe implements AddressAssignable {
 		final int index = assigned.incrementAndGet();
 		if(index > addresses[0].length) throw new RuntimeException("Invalid state. Address slots [" + index +  "] are full");
 		return index;
+	}
+	
+	/** Indicates if this deallocatable has been refed */
+	private boolean refed = false;
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.Deallocatable#isReferenced()
+	 */
+	@Override
+	public boolean isReferenced() {
+		return refed;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.Deallocatable#setReferenced()
+	 */
+	@Override
+	public void setReferenced() {
+		refed = true;
 	}
 
 }

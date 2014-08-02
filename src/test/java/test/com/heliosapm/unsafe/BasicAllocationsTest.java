@@ -49,6 +49,7 @@ public class BasicAllocationsTest extends BaseTest {
 	{
 		if(baselineSet.compareAndSet(false, true)) {
 			System.clearProperty(UnsafeAdapter.SAFE_MANAGER_PROP);
+			System.clearProperty(UnsafeAdapter.TRACK_ALLOCS_PROP);
 			ReflectionHelper.invoke(UnsafeAdapter.class, "reset");
 			Assert.assertFalse("Adapter was not set to unsafe", UnsafeAdapter.isSafeAdapter());		
 			Assert.assertTrue("Unsafe Adapter MBean Was Not Registered", JMXHelper.getDefaultMBeanServer().isRegistered(UnsafeAdapter.UNSAFE_MEM_OBJECT_NAME));

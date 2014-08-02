@@ -132,9 +132,15 @@ public class SafeAdapterImpl extends DefaultUnsafeAdapterImpl implements SafeAda
 		ByteBuffer buff = onHeap ? ByteBuffer.allocate((int)size) : ByteBuffer.allocateDirect((int)size);
 		long address = UnsafeAdapter.getAddressOf(buff);
 		if(trackMem) {		
-			memoryAllocations.put(address, new long[]{size, alignmentOverhead});
-			totalMemoryAllocated.addAndGet(size);
-			totalAlignmentOverhead.addAndGet(alignmentOverhead);
+			if(trackMem) {		
+				memoryAllocations.put(address, size);
+				totalMemoryAllocated.addAndGet(size);
+				totalAllocationCount.incrementAndGet();
+				if(alignmentOverhead>0) {
+					totalAlignmentOverhead.addAndGet(alignmentOverhead);
+					alignmentOverheads.put(address, alignmentOverhead); 
+				}
+			}
 		}
 		return address;
 	}
@@ -150,14 +156,18 @@ public class SafeAdapterImpl extends DefaultUnsafeAdapterImpl implements SafeAda
 		if(trackMem) {
 			// ==========================================================
 			//  Subtract pervious allocation
-			// ==========================================================				
-			long[] alloc = memoryAllocations.remove(address);
-			if(alloc!=null) {				
-				totalMemoryAllocated.addAndGet(-1L * alloc[0]);
-				totalAlignmentOverhead.addAndGet(-1L * alloc[1]);
+			// ==========================================================
+			totalAllocationCount.decrementAndGet();
+			long sz = memoryAllocations.remove(address);
+			if(sz!=0) {								
+				totalMemoryAllocated.addAndGet(-1L * sz);				
+			}
+			sz = alignmentOverheads.remove(address);
+			if(sz!=0) {								
+				totalAlignmentOverhead.addAndGet(-1L * sz);								
 			}
 		}		
-		UNSAFE.freeMemory(address);
+		
 	}	
 
 	/**

@@ -33,7 +33,7 @@ package com.heliosapm.unsafe;
  * <p><code>com.heliosapm.unsafe.AddressAssignable</code></p>
  */
 
-public interface AddressAssignable extends Deallocatable {
+public interface AddressAssignable {
 	
 	/**
 	 * Called by the {@link UnsafeAdapter} to assign the allocated address on an allocation call

@@ -49,7 +49,7 @@ public class ManagedAllocationsTest extends BasicAllocationsTest {
 	{
 		if(baselineSet.compareAndSet(false, true)) {
 			System.clearProperty(UnsafeAdapter.SAFE_MANAGER_PROP);
-			System.setProperty("unsafe.allocations.track", "true");
+			System.setProperty(UnsafeAdapter.TRACK_ALLOCS_PROP, "true");
 			ReflectionHelper.invoke(UnsafeAdapter.class, "reset");
 			Assert.assertEquals("UnsafeAdapter is not in managed memory-tracking mode", true, UnsafeAdapter.getMemoryMBean().isTrackingEnabled());
 			Assert.assertFalse("Adapter was not set to unsafe", UnsafeAdapter.isSafeAdapter());		

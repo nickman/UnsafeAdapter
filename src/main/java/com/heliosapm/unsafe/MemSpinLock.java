@@ -10,14 +10,15 @@ package com.heliosapm.unsafe;
 
 public class MemSpinLock implements SpinLock, Deallocatable {
 	/** The lock address */
-	protected final long[] address;
+	protected final long[][] address;
 
 	/**
 	 * Creates a new MemSpinLock
 	 * @param address The address of the lock
 	 */
 	MemSpinLock(long address) {
-		this.address = new long[]{UnsafeAdapter.allocateMemory(UnsafeAdapter.LONG_SIZE, this)};		
+		this.address = new long[1][1];		
+		this.address[0][0] = NO_LOCK;
 	}
 
 	/**
@@ -25,14 +26,14 @@ public class MemSpinLock implements SpinLock, Deallocatable {
 	 * @return the lock address
 	 */
 	public long address() {
-		return address[0];
+		return address[0][0];
 	}
 	/**
 	 * {@inheritDoc}
 	 * @see com.heliosapm.unsafe.Deallocatable#getAddresses()
 	 */
 	@Override
-	public long[] getAddresses() {
+	public long[][] getAddresses() {
 		return address;
 	}
 
@@ -42,7 +43,7 @@ public class MemSpinLock implements SpinLock, Deallocatable {
 	 */
 	@Override
 	public void xlock() {
-		UnsafeAdapter.xlock(address[0]);
+		UnsafeAdapter.xlock(address[0][0]);
 	}
 	
 	/**
@@ -51,7 +52,7 @@ public class MemSpinLock implements SpinLock, Deallocatable {
 	 */
 	@Override
 	public void xlock(boolean barge) {
-		UnsafeAdapter.xlock(address[0], barge);
+		UnsafeAdapter.xlock(address[0][0], barge);
 	}
 	
 	/**
@@ -60,7 +61,7 @@ public class MemSpinLock implements SpinLock, Deallocatable {
 	 */
 	@Override
 	public void xunlock() {
-		UnsafeAdapter.xunlock(address[0]);
+		UnsafeAdapter.xunlock(address[0][0]);
 	}
 	
 	/**
@@ -69,7 +70,7 @@ public class MemSpinLock implements SpinLock, Deallocatable {
 	 */
 	@Override
 	public boolean isLocked() {
-		return UnsafeAdapter.xislocked(address[0]);
+		return UnsafeAdapter.xislocked(address[0][0]);
 	}
 	
 	/**
@@ -78,7 +79,38 @@ public class MemSpinLock implements SpinLock, Deallocatable {
 	 */
 	@Override
 	public boolean isLockedByMe() {
-		return UnsafeAdapter.xislockedbyt(address[0]);
+		return UnsafeAdapter.xislockedbyt(address[0][0]);
 	}
+	
+	/** Indicates if this deallocatable has been refed */
+	private boolean refed = false;
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.Deallocatable#isReferenced()
+	 */
+	@Override
+	public boolean isReferenced() {
+		try {
+			xlock();
+			return refed;
+		} finally {
+			xunlock();
+		}
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.Deallocatable#setReferenced()
+	 */
+	@Override
+	public void setReferenced() {
+		try {
+			xlock();
+			refed = true;
+		} finally {
+			xunlock();
+		}			
+	}	
 
 }

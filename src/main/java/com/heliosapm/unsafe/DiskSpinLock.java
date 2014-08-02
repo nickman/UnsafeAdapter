@@ -19,7 +19,7 @@ import java.nio.channels.FileChannel;
 		/** The lock file name */
 		protected final File diskFile;
 		/** The mapped lock file address */
-		protected final long[] address = new long[1];
+		protected final long[][] address = new long[1][1];
 		/**
 		 * Creates a new MemSpinLock
 		 * @param address The address of the lock
@@ -30,7 +30,7 @@ import java.nio.channels.FileChannel;
 				diskFile.deleteOnExit();
 				FileChannel fc = new RandomAccessFile(diskFile, "rw").getChannel();
 				MappedByteBuffer mbb = fc.map(FileChannel.MapMode.READ_WRITE, 0, UnsafeAdapter.LONG_SIZE * 2);
-				address[0] =  ((sun.nio.ch.DirectBuffer) mbb).address();
+				address[0][0] =  ((sun.nio.ch.DirectBuffer) mbb).address();
 			} catch (Exception ex) {
 				throw new RuntimeException("Failed to allocate disk lock", ex);
 			}
@@ -42,7 +42,7 @@ import java.nio.channels.FileChannel;
 		 * @return the lock address
 		 */
 		public long address() {
-			return address[0];
+			return address[0][0];
 		}
 		
 		/**
@@ -59,7 +59,7 @@ import java.nio.channels.FileChannel;
 		 * @see com.heliosapm.unsafe.Deallocatable#getAddresses()
 		 */
 		@Override
-		public long[] getAddresses() {
+		public long[][] getAddresses() {
 			return address;
 		}
 
@@ -79,8 +79,8 @@ import java.nio.channels.FileChannel;
 		@Override
 		public void xlock(boolean barge) {
 			final long tId = Thread.currentThread().getId();
-			while(!UnsafeAdapter.compareAndSwapLong(null, address[0], NO_LOCK, JVM_PID)) { if(!barge) Thread.yield(); }
-			while(!UnsafeAdapter.compareAndSwapLong(null, address[0] + UnsafeAdapter.LONG_SIZE, NO_LOCK, tId)) { if(!barge) Thread.yield(); }
+			while(!UnsafeAdapter.compareAndSwapLong(null, address[0][0], NO_LOCK, JVM_PID)) { if(!barge) Thread.yield(); }
+			while(!UnsafeAdapter.compareAndSwapLong(null, address[0][0] + UnsafeAdapter.LONG_SIZE, NO_LOCK, tId)) { if(!barge) Thread.yield(); }
 		}		
 		
 		/**
@@ -89,9 +89,9 @@ import java.nio.channels.FileChannel;
 		@Override
 		public void xunlock() {
 			final long tId = Thread.currentThread().getId();
-			if(UnsafeAdapter.getLong(address[0])==JVM_PID  &&  UnsafeAdapter.getLong(address[0] + UnsafeAdapter.LONG_SIZE)==tId) {
-				UnsafeAdapter.compareAndSwapLong(null, address[0] + UnsafeAdapter.LONG_SIZE, tId, NO_LOCK);
-				UnsafeAdapter.compareAndSwapLong(null, address[0], JVM_PID, NO_LOCK);
+			if(UnsafeAdapter.getLong(address[0][0])==JVM_PID  &&  UnsafeAdapter.getLong(address[0][0] + UnsafeAdapter.LONG_SIZE)==tId) {
+				UnsafeAdapter.compareAndSwapLong(null, address[0][0] + UnsafeAdapter.LONG_SIZE, tId, NO_LOCK);
+				UnsafeAdapter.compareAndSwapLong(null, address[0][0], JVM_PID, NO_LOCK);
 			}
 		}
 
@@ -105,5 +105,36 @@ import java.nio.channels.FileChannel;
 		public boolean isLockedByMe() {
 			// TODO Auto-generated method stub
 			return false;
+		}
+
+		/** Indicates if this deallocatable has been refed */
+		private boolean refed = false;
+		
+		/**
+		 * {@inheritDoc}
+		 * @see com.heliosapm.unsafe.Deallocatable#isReferenced()
+		 */
+		@Override
+		public boolean isReferenced() {
+			try {
+				xlock();
+				return refed;
+			} finally {
+				xunlock();
+			}
+		}
+
+		/**
+		 * {@inheritDoc}
+		 * @see com.heliosapm.unsafe.Deallocatable#setReferenced()
+		 */
+		@Override
+		public void setReferenced() {
+			try {
+				xlock();
+				refed = true;
+			} finally {
+				xunlock();
+			}			
 		}
 	}

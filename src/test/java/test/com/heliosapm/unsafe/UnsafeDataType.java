@@ -24,11 +24,11 @@
  */
 package test.com.heliosapm.unsafe;
 
-import com.heliosapm.unsafe.UnsafeAdapterOld;
+import com.heliosapm.unsafe.UnsafeAdapter;
 
 /**
  * <p>Title: UnsafeDataType</p>
- * <p>Description: Test supporting enumeration of data types manipulatable through the UnsafeAdapterOld</p> 
+ * <p>Description: Test supporting enumeration of data types manipulatable through the UnsafeAdapter</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>test.com.heliosapm.unsafe.UnsafeDataType</code></p>
@@ -98,7 +98,7 @@ public enum UnsafeDataType {
 		 */
 		@Override
 		public void put(Boolean value, long address) {
-			UnsafeAdapterOld.putBoolean(null, address, value.booleanValue());
+			UnsafeAdapter.putBoolean(null, address, value.booleanValue());
 		}
 
 		/**
@@ -107,25 +107,27 @@ public enum UnsafeDataType {
 		 */
 		@Override
 		public void put(Object target, Boolean value, long offset) {
-			UnsafeAdapterOld.putBoolean(target, offset, value.booleanValue());			
+			UnsafeAdapter.putBoolean(target, offset, value.booleanValue());			
 		}
 
 		/**
 		 * {@inheritDoc}
 		 * @see test.com.heliosapm.unsafe.UnsafeDataType.UnsafeDataTypeOps#get(long)
 		 */
+		@SuppressWarnings("boxing")
 		@Override
 		public Boolean get(long address) {
-			return UnsafeAdapterOld.getBoolean(null, address);
+			return UnsafeAdapter.getBoolean(null, address);
 		}
 
 		/**
 		 * {@inheritDoc}
 		 * @see test.com.heliosapm.unsafe.UnsafeDataType.UnsafeDataTypeOps#get(java.lang.Object, long)
 		 */
+		@SuppressWarnings("boxing")
 		@Override
 		public Boolean get(Object target, long offset) {
-			return UnsafeAdapterOld.getBoolean(target, offset);
+			return UnsafeAdapter.getBoolean(target, offset);
 		}		
 	}
 }

@@ -228,4 +228,24 @@ public class AllocationPointer implements ReferenceProvider<AllocationPointer>, 
 		return phantomRef;
 	}
 
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.Deallocatable#isReferenced()
+	 */
+	@Override
+	public boolean isReferenced() {
+		return phantomRef != null;
+	}
+
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.Deallocatable#setReferenced()
+	 */
+	@Override
+	public void setReferenced() {
+		/* No Op */		
+	}
+
 }

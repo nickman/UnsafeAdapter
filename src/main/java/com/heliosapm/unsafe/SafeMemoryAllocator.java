@@ -32,14 +32,11 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
-import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
-
-import com.heliosapm.unsafe.DefaultUnsafeAdapterImpl.MemoryAllocationReference;
 
 import sun.misc.Cleaner;
 import sun.nio.ch.DirectBuffer;
@@ -306,7 +303,6 @@ public class SafeMemoryAllocator implements Runnable {
 		System.out.println(msg);
 	}
 	
-
 	
 	class SafeMemoryAllocationWeakReference extends WeakReference<SafeMemoryAllocation> {
 		/** The size of the allocation */
@@ -316,17 +312,17 @@ public class SafeMemoryAllocator implements Runnable {
     	/** The index of this reference */
     	private final long index = refIndexFactory.incrementAndGet();
     	/** The memory addresses owned by this reference */
-    	private final long[] addresses;
+    	private final long[][] addresses;
     	/** The Range for the referent's allocation */
     	private final Range range;
 		
 		
 		public SafeMemoryAllocationWeakReference(SafeMemoryAllocation allocation, Range range, Deallocatable referent) {
-			super(allocation, refQueue);
+			super(allocation, (ReferenceQueue<? super SafeMemoryAllocation>) refQueue);
 			this.range = range;
 			size = allocation.size * -1L;
 			alignmentOverhead = allocation.alignmentOverhead * -1L;
-			addresses = referent==null ? new long[0] : referent.getAddresses();
+			addresses = referent==null ? null : referent.getAddresses();
 		}
 
 		public SafeMemoryAllocationWeakReference(SafeMemoryAllocation allocation, Range range) {
@@ -617,7 +613,7 @@ public class SafeMemoryAllocator implements Runnable {
 		public void close() {
 			for(long[] address: addresses) {
 				if(address[0]>0) {
-					freeMemory(address[0]);
+					//freeMemory(address[0]);  // FIXME:  implement this
 					address[0] = 0L;
 				}
 				log("Freed memory at address [%s]", address[0]);

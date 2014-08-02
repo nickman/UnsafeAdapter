@@ -19,6 +19,17 @@ public interface Deallocatable {
 	 */
 	public long[][] getAddresses();
 	
+	/**
+	 * Indicates if this Deallocatable has been referenced by an enqueued reference.
+	 * @return true if referenced, false otherwise
+	 */
+	public boolean isReferenced();
+	
+	/**
+	 * Marks this Deallocatable as referenced by an enqueued reference
+	 */
+	public void setReferenced();
+	
 	
 	
 }
