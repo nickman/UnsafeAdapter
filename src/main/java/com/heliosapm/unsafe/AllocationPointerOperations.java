@@ -25,7 +25,6 @@
 package com.heliosapm.unsafe;
 
 import java.lang.reflect.Field;
-import java.util.concurrent.atomic.AtomicLong;
 
 import sun.misc.Unsafe;
 
@@ -44,16 +43,13 @@ public class AllocationPointerOperations {
 	private static final Unsafe unsafe;	
 	/** A zero byte const */
 	public static final byte ZERO_BYTE = 0;
-	
+	/** The byte size of a long */
+	public static final long LONG_SIZE = 8;
 	/** The size of the memory block header in bytes (2 ints) */
 	public static final int HEADER_SIZE = 8;
 	
 	/** The system prop to override the allocation size */
 	public static final String ALLOC_SIZE_PROP = "allocation.pointer.alloc.size";	
-
-	
-//	private static final AtomicLong initialAllocations = new AtomicLong(0);
-//	private static final AtomicLong reAllocations = new AtomicLong(0);
 	
 	static {
 		try {
@@ -96,23 +92,18 @@ public class AllocationPointerOperations {
     /** The size of a <b><code>int[]</code></b> array offset */
     public final static int INT_ARRAY_OFFSET;
     
-
-	
-	
-	
 	/**
 	 * Allocates a new AllocationPointerOperations.
 	 * @return the address of the created memory block. 
 	 */
 	public static final long newAllocationPointer() {
-		//log("Allocating Memory: %s bytes", ALLOC_SIZE * ADDRESS_SIZE + 8);
 		long address = unsafe.allocateMemory(ALLOC_SIZE * ADDRESS_SIZE + 8);
 		unsafe.putInt(address, ALLOC_SIZE);
 		unsafe.putInt(address + 4, 0);
 		unsafe.setMemory(address + 8, ALLOC_MEM_SIZE, ZERO_BYTE);
-//		initialAllocations.incrementAndGet();
 		return address;
 	}
+	
 	
 	/**
 	 * Assigns the passed address to the next available slot in the referenced AllocationPointerOperations
@@ -128,13 +119,24 @@ public class AllocationPointerOperations {
 		}
 		final int nextIndex = incrementSize(addr);
 		final long offset = HEADER_SIZE + (nextIndex * ADDRESS_SIZE);
-		//log("-----> NextIndex: %s,  Offset: %s, Size: %s, Byte Capacity: %s", nextIndex, offset, getSize(addr), getCapacity(addr)*ADDRESS_SIZE+HEADER_SIZE);
-//		if(offset >= getCapacity(addr)*ADDRESS_SIZE+HEADER_SIZE) {
-//			log("HUH ??????????");
-//		}
 		unsafe.putAddress(addr + offset, newAddress);
 		return addr;
 	}
+	
+	/**
+	 * Assigns the passed address to the next available slot in the referenced AllocationPointerOperations
+	 * @param address The address of the allocation pointer memory block
+	 * @param newAddress The address to assign to the next slot
+	 * @return the new address of the memory block if it changed, or the original passed <code>address</code> if 
+	 * the memory block had an available empty address slot
+	 */
+	public static final long assignSlot(final long address, final long newAddress, final long trackingAddress, final long size) {
+		long addr = assignSlot(address, newAddress);
+		
+		return addr;
+		
+	}
+	
 	
 	/**
 	 * Assigns the passed address to an existing slot in the referenced AllocationPointerOperations

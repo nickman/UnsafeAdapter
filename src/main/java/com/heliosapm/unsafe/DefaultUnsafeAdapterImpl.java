@@ -25,6 +25,7 @@
 package com.heliosapm.unsafe;
 
 import java.lang.management.ManagementFactory;
+import java.lang.ref.PhantomReference;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.reflect.Field;
@@ -36,6 +37,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
 
 import sun.misc.Unsafe;
+
+import com.heliosapm.unsafe.ReflectionHelper.ReferenceQueueLengthReader;
+import com.heliosapm.unsafe.SafeMemoryAllocator.MemoryAllocationReference;
 
 
 
@@ -80,10 +84,6 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	/** Serial number factory for cleaner threads */
 	private static final AtomicLong cleanerSerial = new AtomicLong(0L);
 	
-	/** The field for accessing the pending queue length */
-	private static final Field queueLengthField;
-	/** The field for accessing the pending queue lock */
-	private static final Field queueLockField;
 
 
 	// =========================================================
@@ -96,10 +96,12 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	public final boolean alignMem;
 	/** The unsafe memory management MBean */
 	final MemoryMBean unsafeMemoryStats = null;
-	/** A map of memory allocation sizes keyed by the address */
+	/** A map of memory allocation sizes keyed by the address for allocators not tracking their own sizes */
 	final NonBlockingHashMapLong<long[]> memoryAllocations;
 	/** The total native memory allocation */
 	final AtomicLong totalMemoryAllocated;
+	/** The total number of native memory allocations */
+	final AtomicLong totalAllocationCount;
 	/** The total native memory allocation overhead for alignment */
 	final AtomicLong totalAlignmentOverhead;
 	/** The object to synchronize on for accessing the pending queue length */
@@ -107,22 +109,13 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	
 	/** The reference queue where collected allocations go */
 	final ReferenceQueue<?> refQueue;
+	/** The queue length reader for the reference queue */
+	final ReferenceQueueLengthReader<?> refQueueLengthReader;
 	/** The reference cleaner thread */
 	Thread cleanerThread;
 	
 	
 		
-	static {
-		try {
-			queueLengthField = ReferenceQueue.class.getDeclaredField("queueLength");
-			queueLengthField.setAccessible(true);
-			queueLockField = ReferenceQueue.class.getDeclaredField("lock");
-			queueLockField.setAccessible(true);
-			//queueLengthFieldLock =f.get(refQueue); 
-		} catch (Exception ex) {
-			throw new RuntimeException(ex);
-		}		
-	}
 
 	
 	/**
@@ -159,6 +152,38 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 			loge("Failed to reset UnsafeAdapter", t);
 		}
 	}
+	
+	/**
+	 * <p>Title: DeallocationPhantomReference</p>
+	 * <p>Description: A phantom reference extension for tracking {@link Deallocatable} instance enqueueing </p> 
+	 * <p>Company: Helios Development Group LLC</p>
+	 * @author Whitehead (nwhitehead AT heliosdev DOT org)
+	 * <p><code>com.heliosapm.unsafe.DefaultUnsafeAdapterImpl.DeallocationPhantomReference</code></p>
+	 */
+	private class DeallocationPhantomReference extends PhantomReference<Deallocatable> implements Deallocatable {
+		/** The addresses to deallocate when this reference is enqueued */
+		final long[][] addresses;
+		
+		/**
+		 * Creates a new DeallocationPhantomReference
+		 * @param referent The deallocatable to create the reference for
+		 * @param refQueue The reference queue
+		 */
+		@SuppressWarnings("unchecked")
+		public DeallocationPhantomReference(Deallocatable referent,	ReferenceQueue<?> refQueue) {
+			super(referent, (ReferenceQueue<? super Deallocatable>) refQueue);
+			this.addresses = referent.getAddresses();
+		}
+
+		/**
+		 * {@inheritDoc}
+		 * @see com.heliosapm.unsafe.Deallocatable#getAddresses()
+		 */
+		@Override
+		public long[][] getAddresses() {
+			return addresses;
+		}
+	}
 
 	
 	/**
@@ -177,7 +202,8 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 		// =========================================================
 		// Create the reference queue for collected deallocation refs
 		// =========================================================        
-		refQueue = new ReferenceQueue<DeAllocateMe>();
+		refQueue = new ReferenceQueue<Object>();
+		refQueueLengthReader = ReflectionHelper.newReferenceQueueLengthReader(refQueue); 
 		
 		// =========================================================
 		// Read the system props to get the configuration
@@ -189,7 +215,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
     	// Otherwise, set to null.
 		// =========================================================            	
     	if(trackMem) {
-    		
+    		totalAllocationCount = new AtomicLong(0L);
     		totalMemoryAllocated = new AtomicLong(0L);
     		totalAlignmentOverhead = new AtomicLong(0L);
         	if(this.getClass()==DefaultUnsafeAdapterImpl.class) {
@@ -198,6 +224,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
         		memoryAllocations = null;
         	}
     	} else {
+    		totalAllocationCount = null;
     		memoryAllocations = null;
     		totalMemoryAllocated = null;
     		totalAlignmentOverhead = null;    		    		
@@ -259,26 +286,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	 * @return the number of pending references
 	 */
 	public long getRefQueuePending() {
-		if(queueLengthFieldLock==null) {
-			synchronized(refQueue) {
-				if(queueLengthFieldLock==null) {
-					try {
-						queueLengthFieldLock = queueLockField.get(refQueue);
-					} catch (Exception x) {
-						x.printStackTrace(System.err);
-						return -1L;
-					}					
-				}
-			}
-		}
-		try {
-			synchronized(queueLengthFieldLock) {
-				return queueLengthField.getLong(refQueue);
-			}
-		} catch (Exception x) {
-			x.printStackTrace(System.err);
-			return -1;
-		}
+		return refQueueLengthReader.getQueueLength();
 	}
 	
 
@@ -389,9 +397,9 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	
 	/**
 	 * Resizes a new block of native memory, to the given size in bytes.
-	 * <b>NOTE:</b>If the caller implements {@link DeAllocateMe} and expects the allocations
+	 * <b>NOTE:</b>If the caller implements {@link Deallocatable} and expects the allocations
 	 * to be automatically cleared, the returned value should overwrite the index of 
-	 * the {@link DeAllocateMe}'s array where the previous address was.    
+	 * the {@link Deallocatable}'s array where the previous address was.    
 	 * @param address The address of the existing allocation
 	 * @param size The size of the new allocation in bytes
 	 * @return The address of the new allocation
@@ -403,9 +411,9 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	
 	/**
 	 * Resizes a new block of aligned (if enabled) native memory, to the given size in bytes.
-	 * <b>NOTE:</b>If the caller implements {@link DeAllocateMe} and expects the allocations
+	 * <b>NOTE:</b>If the caller implements {@link Deallocatable} and expects the allocations
 	 * to be automatically cleared, the returned value should overwrite the index of 
-	 * the {@link DeAllocateMe}'s array where the previous address was.   
+	 * the {@link Deallocatable}'s array where the previous address was.   
 	 * @param address The address of the existing allocation
 	 * @param size The size of the new allocation in bytes
 	 * @return The address of the new allocation
@@ -421,9 +429,9 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	
 	/**
 	 * Resizes a new block of native memory, to the given size in bytes.
-	 * <b>NOTE:</b>If the caller implements {@link DeAllocateMe} and expects the allocations
+	 * <b>NOTE:</b>If the caller implements {@link Deallocatable} and expects the allocations
 	 * to be automatically cleared, the returned value should overwrite the index of 
-	 * the {@link DeAllocateMe}'s array where the previous address was.  
+	 * the {@link Deallocatable}'s array where the previous address was.  
 	 * @param address The address of the existing allocation
 	 * @param size The size of the new allocation in bytes
 	 * @param alignmentOverhead The established overhead of the alignment

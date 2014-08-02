@@ -15,7 +15,7 @@ import java.nio.channels.FileChannel;
 	 * FIXME: INCOMPLETE
 	 */
 
-	public class DiskSpinLock implements SpinLock, DeAllocateMe {
+	public class DiskSpinLock implements SpinLock, Deallocatable {
 		/** The lock file name */
 		protected final File diskFile;
 		/** The mapped lock file address */
@@ -56,7 +56,7 @@ import java.nio.channels.FileChannel;
 		
 		/**
 		 * {@inheritDoc}
-		 * @see com.heliosapm.unsafe.DeAllocateMe#getAddresses()
+		 * @see com.heliosapm.unsafe.Deallocatable#getAddresses()
 		 */
 		@Override
 		public long[] getAddresses() {

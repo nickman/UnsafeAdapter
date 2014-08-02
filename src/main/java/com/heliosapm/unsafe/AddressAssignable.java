@@ -26,14 +26,14 @@ package com.heliosapm.unsafe;
 
 /**
  * <p>Title: AddressAssignable</p>
- * <p>Description: A compliment to {@link DeAllocateMe} where instances will be updated with the address of the memory allocation request
+ * <p>Description: A compliment to {@link Deallocatable} where instances will be updated with the address of the memory allocation request
  * when issuing an memory allocation request against {@link UnsafeAdapter}.</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>com.heliosapm.unsafe.AddressAssignable</code></p>
  */
 
-public interface AddressAssignable extends DeAllocateMe {
+public interface AddressAssignable extends Deallocatable {
 	
 	/**
 	 * Called by the {@link UnsafeAdapter} to assign the allocated address on an allocation call

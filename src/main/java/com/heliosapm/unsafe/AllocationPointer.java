@@ -36,35 +36,70 @@ import java.lang.ref.ReferenceQueue;
  * <p><code>com.heliosapm.unsafe.AllocationPointer</code></p>
  */
 
-public class AllocationPointer implements ReferenceProvider<AllocationPointer>, DeAllocateMe {
+public class AllocationPointer implements ReferenceProvider<AllocationPointer>, Deallocatable {
 	/** The address of the memory block allocated for this AllocationPointer */
-	private final long[] _address = new long[1];
+	private final long[][] _address;
 	/** The phantom reference to this allocation pointer if one has been requested */
 	private PhantomReference<AllocationPointer> phantomRef = null;
+
+	/**
+	 * Creates a new AllocationPointer with no allocation tracking and the default capacity ({@link AllocationPointerOperations#ALLOC_SIZE})
+	 */
+	public AllocationPointer() {
+		this(false);
+	}
+
 	
 	/**
 	 * Creates a new AllocationPointer with the default capacity ({@link AllocationPointerOperations#ALLOC_SIZE})
+	 * @param trackAllocations true to enable allocation tracking, false otherwise
 	 */
-	public AllocationPointer() {
-		_address[0] = AllocationPointerOperations.newAllocationPointer();
+	public AllocationPointer(final boolean trackAllocations) {
+		if(trackAllocations) {
+			_address = new long[1][2];
+			_address[0][1] = AllocationPointerOperations.newAllocationPointer();
+		} else {
+			_address = new long[1][1];
+		}		 
+		_address[0][0] = AllocationPointerOperations.newAllocationPointer();
 	}
+	
+	/**
+	 * Creates a new AllocationPointer with no allocation tracking and loads the passed address.
+	 * @param address The address to load into this AllocationPointer.
+	 */
+	public AllocationPointer(long address) {
+		this(address, false);
+	}
+
 	
 	/**
 	 * Creates a new AllocationPointer and loads the passed address.
 	 * @param address The address to load into this AllocationPointer.
+	 * @param trackAllocations true to enable allocation tracking, false otherwise
 	 */
-	public AllocationPointer(long address) {
-		this();
+	public AllocationPointer(long address, final boolean trackAllocations) {
+		this(trackAllocations);
 		if(address>0) {
 			assignSlot(address);
 		}		
 	}
 	
 	/**
-	 * Creates a new AllocationPointer and loads the passed addresses.
+	 * Creates a new AllocationPointer with no allocation tracking and loads the passed addresses.
 	 * @param addresses The addresses to load into this AllocationPointer.
 	 */
-	public AllocationPointer(long[] addresses) {
+	public AllocationPointer(final long[] addresses) {
+		this(addresses, false);
+	}
+	
+	
+	/**
+	 * Creates a new AllocationPointer and loads the passed addresses.
+	 * @param addresses The addresses to load into this AllocationPointer.
+	 * @param trackAllocations true to enable allocation tracking, false otherwise
+	 */
+	public AllocationPointer(final long[] addresses, final boolean trackAllocations) {
 		this();
 		if(addresses!=null) {
 			for(long address: addresses) {
@@ -82,8 +117,8 @@ public class AllocationPointer implements ReferenceProvider<AllocationPointer>, 
 	 * @return the index of the slot the address was inserted into
 	 */
 	public final int assignSlot(final long newAddress) {
-		_address[0] = AllocationPointerOperations.assignSlot(_address[0], newAddress);
-		return AllocationPointerOperations.getLastIndex(_address[0]);
+		_address[0][0] = AllocationPointerOperations.assignSlot(_address[0][0], newAddress);
+		return AllocationPointerOperations.getLastIndex(_address[0][0]);
 	}
 	
 	/**
@@ -92,15 +127,15 @@ public class AllocationPointer implements ReferenceProvider<AllocationPointer>, 
 	 * @param index The index of the slot to write the address to
 	 */
 	public final void reassignSlot(final long newAddress, final int index) {
-		AllocationPointerOperations.reassignSlot(_address[0], newAddress, index);
+		AllocationPointerOperations.reassignSlot(_address[0][0], newAddress, index);
 	}
 	
 	/**
-	 * Returns the slotted addresses as an array of longs
+	 * Returns the slotted addresses as a {@link Deallocatable} array of longs
 	 * @return an array of addresses
 	 */
-	public final long[] getAddresses() {
-		return AllocationPointerOperations.getAddresses(_address[0]);
+	public final long[][] getAddresses() {
+		return _address;
 	}
 	
 	/**
@@ -108,7 +143,7 @@ public class AllocationPointer implements ReferenceProvider<AllocationPointer>, 
 	 * @return the number of populated slots
 	 */
 	public final int getSize() {
-		return AllocationPointerOperations.getSize(_address[0]);
+		return AllocationPointerOperations.getSize(_address[0][0]);
 	}
 	
 	/**
@@ -116,7 +151,7 @@ public class AllocationPointer implements ReferenceProvider<AllocationPointer>, 
 	 * @return the number of allocated slots
 	 */
 	public final int getCapacity() {
-		return AllocationPointerOperations.getCapacity(_address[0]);
+		return AllocationPointerOperations.getCapacity(_address[0][0]);
 	}
 	
 	/**
@@ -124,7 +159,7 @@ public class AllocationPointer implements ReferenceProvider<AllocationPointer>, 
 	 * @return the index of the most recently assigned address slot
 	 */
 	public final int getLastIndex() {
-		return AllocationPointerOperations.getLastIndex(_address[0]);
+		return AllocationPointerOperations.getLastIndex(_address[0][0]);
 	}
 	
 	/**
@@ -133,7 +168,7 @@ public class AllocationPointer implements ReferenceProvider<AllocationPointer>, 
 	 * @return true if full, false otherwise
 	 */
 	public final boolean isFull() {
-		return AllocationPointerOperations.isFull(_address[0]);
+		return AllocationPointerOperations.isFull(_address[0][0]);
 	}
 	
 	/**
@@ -142,7 +177,7 @@ public class AllocationPointer implements ReferenceProvider<AllocationPointer>, 
 	 * @return the address at the specified index
 	 */
 	public final long getAddress(final int index) {
-		return AllocationPointerOperations.getAddress(_address[0], index);
+		return AllocationPointerOperations.getAddress(_address[0][0], index);
 	}
 	
 	
@@ -152,7 +187,7 @@ public class AllocationPointer implements ReferenceProvider<AllocationPointer>, 
 	 * @return a string describing the status of the AllocationPointer
 	 */
 	public final String toString() {
-		return AllocationPointerOperations.print(_address[0]);
+		return AllocationPointerOperations.print(_address[0][0]);
 	}
 	
 	/**
@@ -160,7 +195,7 @@ public class AllocationPointer implements ReferenceProvider<AllocationPointer>, 
 	 * @return a string outlining the summary and each of the addresses
 	 */
 	public final String dump() {
-		return AllocationPointerOperations.dump(_address[0]);
+		return AllocationPointerOperations.dump(_address[0][0]);
 	}
 	
 	
@@ -168,7 +203,7 @@ public class AllocationPointer implements ReferenceProvider<AllocationPointer>, 
 	 * Frees all memory allocated within this AllocationPointer
 	 */
 	public final void free() {
-		AllocationPointerOperations.free(_address[0]);
+		AllocationPointerOperations.free(_address[0][0]);
 	}
 	
 	
@@ -177,7 +212,7 @@ public class AllocationPointer implements ReferenceProvider<AllocationPointer>, 
 	 * @return the total byte size of this AllocationPointer
 	 */
 	public final long getByteSize() {
-		return AllocationPointerOperations.getEndOffset(_address[0]);
+		return AllocationPointerOperations.getEndOffset(_address[0][0]);
 	}
 	
 	

@@ -87,7 +87,7 @@ public class SafeMemoryAllocator implements Runnable {
 	final Map<LongArrayMapKey, Map<Long, SafeMemoryAllocation>> allocationByLongArr = 
 				Collections.synchronizedMap(new WeakHashMap<LongArrayMapKey, Map<Long, SafeMemoryAllocation>>(1024));
 	/** The reference queue where collected allocations go */
-	final ReferenceQueue<? super DeAllocateMe> refQueue;
+	final ReferenceQueue<? super Deallocatable> refQueue;
 	/** The reference cleaner thread */
 	Thread cleanerThread;
 	/** The total memory allocated */
@@ -118,7 +118,7 @@ public class SafeMemoryAllocator implements Runnable {
 	 */
 	private SafeMemoryAllocator() {
 		allocations = new ConcurrentHashMap<Range, SafeMemoryAllocationWeakReference>();
-		refQueue = new ReferenceQueue<DeAllocateMe>();
+		refQueue = new ReferenceQueue<Deallocatable>();
 		cleanerThread = new Thread(this, "SafeMemoryAllocationCleaner#" + cleanerSerial.incrementAndGet());
 		alignMem = System.getProperties().containsKey(UnsafeAdapter.ALIGN_ALLOCS_PROP);
 		onHeap = System.getProperties().containsKey(UnsafeAdapter.SAFE_ALLOCS_ONHEAP_PROP);
@@ -321,7 +321,7 @@ public class SafeMemoryAllocator implements Runnable {
     	private final Range range;
 		
 		
-		public SafeMemoryAllocationWeakReference(SafeMemoryAllocation allocation, Range range, DeAllocateMe referent) {
+		public SafeMemoryAllocationWeakReference(SafeMemoryAllocation allocation, Range range, Deallocatable referent) {
 			super(allocation, refQueue);
 			this.range = range;
 			size = allocation.size * -1L;
@@ -371,7 +371,7 @@ public class SafeMemoryAllocator implements Runnable {
 		 * @param onHeap true for on heap memory, false for direct
 		 * @param referent optional The auto-tracking dealocation reference
 		 */
-		SafeMemoryAllocation(long size, long alignmentOverhead, boolean onHeap, DeAllocateMe referent) {
+		SafeMemoryAllocation(long size, long alignmentOverhead, boolean onHeap, Deallocatable referent) {
 			if(size > Integer.MAX_VALUE || size < 1) throw new IllegalArgumentException("Invalid Safe Memory Size [" + size + "]", new Throwable());
 			this.size = size;
 			this.alignmentOverhead = alignmentOverhead;
@@ -414,7 +414,7 @@ public class SafeMemoryAllocator implements Runnable {
 		 * @param onHeap true for on heap memory, false for direct
 		 * @param referent optional The auto-tracking dealocation reference
 		 */
-		SafeMemoryAllocation(long size, boolean onHeap, DeAllocateMe referent) {
+		SafeMemoryAllocation(long size, boolean onHeap, Deallocatable referent) {
 			this(size, 0L, onHeap, referent);
 		}
 
@@ -592,7 +592,7 @@ public class SafeMemoryAllocator implements Runnable {
   * @author Whitehead (nwhitehead AT heliosdev DOT org)
   * <p><code>com.heliosapm.unsafe.DefaultUnsafeAdapterImpl.MemoryAllocationReference</code></p>
   */
- class MemoryAllocationReference extends PhantomReference<DeAllocateMe> {
+ class MemoryAllocationReference extends PhantomReference<Deallocatable> {
  	/** The index of this reference */
  	private final long index = refIndexFactory.incrementAndGet();
  	/** The memory addresses owned by this reference */
@@ -602,7 +602,7 @@ public class SafeMemoryAllocator implements Runnable {
 		 * Creates a new MemoryAllocationReference
 		 * @param referent the memory address holder
 		 */
-		public MemoryAllocationReference(DeAllocateMe referent) {
+		public MemoryAllocationReference(Deallocatable referent) {
 			super(referent, refQueue);
 			addresses = referent==null ? EMPTY_ADDRESSES : referent.getAddresses();
 			deAllocs.put(index, this);
@@ -675,7 +675,7 @@ public class SafeMemoryAllocator implements Runnable {
 //	 * @return The address of the allocated memory
 //	 * @see sun.misc.Unsafe#allocateMemory(long)
 //	 */
-//	public long allocateMemory(long size, DeAllocateMe dealloc) {
+//	public long allocateMemory(long size, Deallocatable dealloc) {
 //		return _allocateMemory(size, 0L, dealloc);
 //	}	
 //	
@@ -703,7 +703,7 @@ public class SafeMemoryAllocator implements Runnable {
 //	 * @return The address of the allocated memory block
 //	 * @see sun.misc.Unsafe#allocateMemory(long)
 //	 */
-//	public long allocateAlignedMemory(long size, DeAllocateMe dealloc) {
+//	public long allocateAlignedMemory(long size, Deallocatable dealloc) {
 //		if(alignMem) {
 //			long alignedSize = UnsafeAdapter.ADDRESS_SIZE==4 ? findNextPositivePowerOfTwo((int)size) : findNextPositivePowerOfTwo((int)size);
 //			return _allocateMemory(alignedSize, alignedSize-size, dealloc);
@@ -735,7 +735,7 @@ public class SafeMemoryAllocator implements Runnable {
 //	 * @see sun.misc.Unsafe#allocateMemory(long)
 //	 */
 //	@SuppressWarnings("unused")
-//	long _allocateMemory(long size, long alignmentOverhead, DeAllocateMe deallocator) {
+//	long _allocateMemory(long size, long alignmentOverhead, Deallocatable deallocator) {
 //		long address = UNSAFE.allocateMemory(size);
 //		if(trackMem) {		
 //			memoryAllocations.put(address, new long[]{size, alignmentOverhead});
@@ -753,9 +753,9 @@ public class SafeMemoryAllocator implements Runnable {
 //	
 //	/**
 //	 * Resizes a new block of native memory, to the given size in bytes.
-//	 * <b>NOTE:</b>If the caller implements {@link DeAllocateMe} and expects the allocations
+//	 * <b>NOTE:</b>If the caller implements {@link Deallocatable} and expects the allocations
 //	 * to be automatically cleared, the returned value should overwrite the index of 
-//	 * the {@link DeAllocateMe}'s array where the previous address was.    
+//	 * the {@link Deallocatable}'s array where the previous address was.    
 //	 * @param address The address of the existing allocation
 //	 * @param size The size of the new allocation in bytes
 //	 * @return The address of the new allocation
@@ -767,9 +767,9 @@ public class SafeMemoryAllocator implements Runnable {
 //	
 //	/**
 //	 * Resizes a new block of aligned (if enabled) native memory, to the given size in bytes.
-//	 * <b>NOTE:</b>If the caller implements {@link DeAllocateMe} and expects the allocations
+//	 * <b>NOTE:</b>If the caller implements {@link Deallocatable} and expects the allocations
 //	 * to be automatically cleared, the returned value should overwrite the index of 
-//	 * the {@link DeAllocateMe}'s array where the previous address was.   
+//	 * the {@link Deallocatable}'s array where the previous address was.   
 //	 * @param address The address of the existing allocation
 //	 * @param size The size of the new allocation in bytes
 //	 * @return The address of the new allocation
@@ -785,9 +785,9 @@ public class SafeMemoryAllocator implements Runnable {
 //	
 //	/**
 //	 * Resizes a new block of native memory, to the given size in bytes.
-//	 * <b>NOTE:</b>If the caller implements {@link DeAllocateMe} and expects the allocations
+//	 * <b>NOTE:</b>If the caller implements {@link Deallocatable} and expects the allocations
 //	 * to be automatically cleared, the returned value should overwrite the index of 
-//	 * the {@link DeAllocateMe}'s array where the previous address was.  
+//	 * the {@link Deallocatable}'s array where the previous address was.  
 //	 * @param address The address of the existing allocation
 //	 * @param size The size of the new allocation in bytes
 //	 * @param alignmentOverhead The established overhead of the alignment

@@ -36,7 +36,7 @@ import java.lang.ref.ReferenceQueue;
  */
 class AllocationPointerPhantomRef extends PhantomReference<AllocationPointer> {
 	/** The address that the referenced AllocationPointer pointed to */
-	private final long[] address;
+	private final long[][] address;
 	
 	/**
 	 * Creates a new AllocationPointerPhantomRef
@@ -44,7 +44,7 @@ class AllocationPointerPhantomRef extends PhantomReference<AllocationPointer> {
 	 * @param address The actual reference to the {@link AllocationPointer}'s address long array.
 	 * @param refQueue The reference queue to register with
 	 */
-	AllocationPointerPhantomRef(AllocationPointer referent, long[] address, ReferenceQueue<? super AllocationPointer> refQueue) {
+	AllocationPointerPhantomRef(AllocationPointer referent, long[][] address, ReferenceQueue<? super AllocationPointer> refQueue) {
 		super(referent, refQueue);
 		this.address = address;
 	}
@@ -54,9 +54,17 @@ class AllocationPointerPhantomRef extends PhantomReference<AllocationPointer> {
 	 * @see java.lang.ref.Reference#clear()
 	 */
 	public void clear() {
-		if(address[0] > 0) {
-			AllocationPointerOperations.free(address[0]);
-			address[0] = 0L;
+		if(address!=null && address.length!=0) {
+			if(address[0][0] > 0) {
+				AllocationPointerOperations.free(address[0][0]);
+				address[0][0] = 0;
+			}
+			if(address[0].length==2) {
+				if(address[1][0] > 0) {
+					AllocationPointerOperations.free(address[1][0]);
+					address[1][0] = 0;
+				}				
+			}
 		}
 		super.clear();
 	}

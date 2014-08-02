@@ -738,7 +738,7 @@ public class UnsafeAdapter {
 	 * @return The address of the allocated memory
 	 * @see sun.misc.Unsafe#allocateMemory(long)
 	 */
-	public static long allocateMemory(long size, DeAllocateMe dealloc) {
+	public static long allocateMemory(long size, Deallocatable dealloc) {
 		return adapter.allocateMemory(size, dealloc);
 	}	
 	
@@ -766,15 +766,15 @@ public class UnsafeAdapter {
 	 * @return The address of the allocated memory block
 	 * @see sun.misc.Unsafe#allocateMemory(long)
 	 */
-	public static long allocateAlignedMemory(long size, DeAllocateMe dealloc) {
+	public static long allocateAlignedMemory(long size, Deallocatable dealloc) {
 		return adapter.allocateAlignedMemory(size, dealloc);
 	}
 	
 	/**
 	 * Resizes a new block of native memory, to the given size in bytes. 
-	 * <b>NOTE:</b>If the caller implements {@link DeAllocateMe} and expects the allocations
+	 * <b>NOTE:</b>If the caller implements {@link Deallocatable} and expects the allocations
 	 * to be automatically cleared, the returned value should overwrite the index of 
-	 * the {@link DeAllocateMe}'s array where the previous address was.   
+	 * the {@link Deallocatable}'s array where the previous address was.   
 	 * @param address The address of the existing allocation
 	 * @param size The size of the new allocation in bytes
 	 * @return The address of the new allocation
@@ -786,9 +786,9 @@ public class UnsafeAdapter {
 	
 	/**
 	 * Resizes a new block of aligned (if enabled) native memory, to the given size in bytes.
-	 * <b>NOTE:</b>If the caller implements {@link DeAllocateMe} and expects the allocations
+	 * <b>NOTE:</b>If the caller implements {@link Deallocatable} and expects the allocations
 	 * to be automatically cleared, the returned value should overwrite the index of 
-	 * the {@link DeAllocateMe}'s array where the previous address was.   
+	 * the {@link Deallocatable}'s array where the previous address was.   
 	 * @param address The address of the existing allocation
 	 * @param size The size of the new allocation in bytes
 	 * @return The address of the new allocation

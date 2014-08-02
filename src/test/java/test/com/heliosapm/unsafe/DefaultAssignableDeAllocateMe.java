@@ -52,7 +52,7 @@ public class DefaultAssignableDeAllocateMe implements AddressAssignable {
 
 	/**
 	 * {@inheritDoc}
-	 * @see com.heliosapm.unsafe.DeAllocateMe#getAddresses()
+	 * @see com.heliosapm.unsafe.Deallocatable#getAddresses()
 	 */
 	@Override
 	public long[][] getAddresses() {

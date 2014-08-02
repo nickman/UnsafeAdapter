@@ -8,7 +8,7 @@ package com.heliosapm.unsafe;
  * <p><code>com.heliosapm.unsafe.UnsafeAdapter.MemSpinLock</code></p>
  */
 
-public class MemSpinLock implements SpinLock, DeAllocateMe {
+public class MemSpinLock implements SpinLock, Deallocatable {
 	/** The lock address */
 	protected final long[] address;
 
@@ -29,7 +29,7 @@ public class MemSpinLock implements SpinLock, DeAllocateMe {
 	}
 	/**
 	 * {@inheritDoc}
-	 * @see com.heliosapm.unsafe.DeAllocateMe#getAddresses()
+	 * @see com.heliosapm.unsafe.Deallocatable#getAddresses()
 	 */
 	@Override
 	public long[] getAddresses() {
