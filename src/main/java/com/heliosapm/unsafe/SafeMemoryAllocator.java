@@ -44,7 +44,7 @@ import sun.nio.ch.DirectBuffer;
 /**
  * <p>Title: SafeMemoryAllocator</p>
  * <p>Description: Mimics true unsafe memory allocations through the use of ByteBuffers. The trick here is to map
- * the ranges of memory addresses that appear to be within the allocated buffer and rewrite/read them to/from
+ * the ranges of memory keyAddresses that appear to be within the allocated buffer and rewrite/read them to/from
  * the ByteBuffer.</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
@@ -311,7 +311,7 @@ public class SafeMemoryAllocator implements Runnable {
 		final long alignmentOverhead;
     	/** The index of this reference */
     	private final long index = refIndexFactory.incrementAndGet();
-    	/** The memory addresses owned by this reference */
+    	/** The memory keyAddresses owned by this reference */
     	private final long[][] addresses;
     	/** The Range for the referent's allocation */
     	private final Range range;
@@ -591,7 +591,7 @@ public class SafeMemoryAllocator implements Runnable {
  class MemoryAllocationReference extends PhantomReference<Deallocatable> {
  	/** The index of this reference */
  	private final long index = refIndexFactory.incrementAndGet();
- 	/** The memory addresses owned by this reference */
+ 	/** The memory keyAddresses owned by this reference */
  	private final long[][] addresses;
  	
 		/**
@@ -633,7 +633,7 @@ public class SafeMemoryAllocator implements Runnable {
 			StringBuilder builder = new StringBuilder();
 			builder.append("MemoryAllocationReference [index=");
 			builder.append(index);
-			builder.append(", addresses=");
+			builder.append(", keyAddresses=");
 			builder.append(addresses != null ? Arrays.deepToString(addresses) : "[]");					
 			builder.append("]");
 			return builder.toString();
@@ -726,7 +726,7 @@ public class SafeMemoryAllocator implements Runnable {
 //	 * Allocates a chunk of memory and returns its address
 //	 * @param size The number of bytes to allocate
 //	 * @param alignmentOverhead The number of bytes allocated in excess of requested for alignment
-//	 * @param deallocator The reference to the object which when collected will deallocate the referenced addresses
+//	 * @param deallocator The reference to the object which when collected will deallocate the referenced keyAddresses
 //	 * @return The address of the allocated memory
 //	 * @see sun.misc.Unsafe#allocateMemory(long)
 //	 */
@@ -739,8 +739,8 @@ public class SafeMemoryAllocator implements Runnable {
 //			totalAlignmentOverhead.addAndGet(alignmentOverhead);
 //		}
 //    	if(deallocator!=null) {
-//    		long[][] addresses = deallocator.getAddresses();
-//    		if(addresses==null || addresses.length==0) {
+//    		long[][] keyAddresses = deallocator.getAddresses();
+//    		if(keyAddresses==null || keyAddresses.length==0) {
 //    			new MemoryAllocationReference(deallocator);
 //    		}
 //    	}		

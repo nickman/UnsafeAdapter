@@ -31,7 +31,7 @@ import sun.misc.Unsafe;
 /**
  * <p>Title: AllocationPointerOperations</p>
  * <p>Description: Static methods for maniplulating an unsafe memory block containing an 
- * array of memory block addresses allocated for a common purpose 
+ * array of memory block keyAddresses allocated for a common purpose 
  * and which will be deallocated when the referencing object becomes phantom reachable.</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
@@ -150,9 +150,9 @@ public class AllocationPointerOperations {
 	}
 	
 	/**
-	 * Returns the addresses of the allocated memory blocks referenced by the passed address as an array of longs
+	 * Returns the keyAddresses of the allocated memory blocks referenced by the passed address as an array of longs
 	 * @param address The address of the allocation pointer memory block
-	 * @return an array of addresses
+	 * @return an array of keyAddresses
 	 */
 	public static final long[] getAddresses(final long address) {
 		final int size = getSize(address);

@@ -25,6 +25,7 @@
 package com.heliosapm.unsafe;
 
 import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryMXBean;
 import java.lang.ref.PhantomReference;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
@@ -75,8 +76,6 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	public static final String AGENT_LIB = "-agentlib:";	
 	/** The legacy debug agent library signature */
 	public static final String LEGACY_AGENT_LIB = "-Xrunjdwp:";
-    /** Serial number factory for memory allocationreferences */
-    private static final AtomicLong refIndexFactory = new AtomicLong(0L);
     /** Empty long[] array const */
     private static final long[][] EMPTY_ADDRESSES = {{}};
 	/** Serial number factory for cleaner threads */
@@ -104,7 +103,11 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	// =========================================================
 	/** A map of phantom refs */
 	final NonBlockingHashMapLong<DeallocationPhantomReference> phantomRefs = new NonBlockingHashMapLong<DeallocationPhantomReference>(1024, true); 
-
+	/** The interface tracker to cache which classes implement "special" UnsafeAdapter interfaces */
+	final InterfaceTracker ifaceTracker = new InterfaceTracker();
+    /** Serial number factory for memory allocationreferences */
+	protected final AtomicLong phantomSerial = new AtomicLong(0L);
+	
 	
 	/** A map of memory allocation sizes keyed by the memory block address */
 	final SpinLockedTLongLongHashMap memoryAllocations;
@@ -167,15 +170,14 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 		}
 	}
 	
-	protected final AtomicLong phantomSerial = new AtomicLong(0L);
+	
 	
 	/**
 	 * Creates a new DeallocationPhantomReference
 	 * @param referent The deallocatable to create the reference for
-	 * @param refQueue The reference queue
 	 */
 	
-	final void newDeallocationPhantomReference(Deallocatable referent, ReferenceQueue<?> refQueue) {
+	final void newDeallocationPhantomReference(Deallocatable referent) {
 		DeallocationPhantomReference phantom = new DeallocationPhantomReference(referent, refQueue);
 		phantomRefs.put(phantom.id, phantom);
 	}
@@ -189,9 +191,9 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	 * <p><code>com.heliosapm.unsafe.DefaultUnsafeAdapterImpl.DeallocationPhantomReference</code></p>
 	 */
 	class DeallocationPhantomReference extends PhantomReference<Deallocatable> implements Deallocatable {
-		/** The addresses to deallocate when this reference is enqueued */
+		/** The keyAddresses to deallocate when this reference is enqueued */
 		final long[][] addresses;
-		
+		/** The unique serial number for this reference */
 		final long id;
 		
 		/**
@@ -425,7 +427,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	 * Allocates a chunk of memory and returns its address
 	 * @param size The number of bytes to allocate
 	 * @param alignmentOverhead The number of bytes allocated in excess of requested for alignment
-	 * @param deallocator The reference to the object which when collected will deallocate the referenced addresses
+	 * @param deallocator The reference to the object which when collected will deallocate the referenced keyAddresses
 	 * @return The address of the allocated memory
 	 * @see sun.misc.Unsafe#allocateMemory(long)
 	 */		
@@ -443,7 +445,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
     	if(deallocator!=null) {
     		long[][] addresses = deallocator.getAddresses();
     		if(addresses!=null && addresses.length>0) {    			
-    			newDeallocationPhantomReference(deallocator, refQueue);
+    			newDeallocationPhantomReference(deallocator );
         		if(deallocator instanceof AddressAssignable) {
         			((AddressAssignable)deallocator).setAllocated(address);
         		}    			
@@ -602,9 +604,9 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	 * the offset supplies an absolute base address.
 	 * 
 	 * The transfers are in coherent (atomic) units of a size determined
-	 * by the address and length parameters.  If the effective addresses and
+	 * by the address and length parameters.  If the effective keyAddresses and
 	 * length are all even modulo 8, the transfer takes place in 'long' units.
-	 * If the effective addresses and length are (resp.) even modulo 4 or 2,
+	 * If the effective keyAddresses and length are (resp.) even modulo 4 or 2,
 	 * the transfer takes place in units of 'int' or 'short'.
 	 * @param srcBase The source object. Can be null, in which case srcOffset will be assumed to be an absolute address.
 	 * @param srcOffset The source object offset, or an absolute adress if srcBase is null
@@ -1162,6 +1164,25 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	//	MemoryMBean Implementation
 	//===========================================================================================================	
     
+	private static final MemoryMXBean memoryMXBean = ManagementFactory.getMemoryMXBean(); 
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#getPendingFinalizationCount()
+	 */
+	@Override
+	public int getPendingFinalizationCount() {
+		return memoryMXBean.getObjectPendingFinalizationCount();
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#getMaxDirectMemory()
+	 */
+	@Override
+	public long getMaxDirectMemory() {
+		return UnsafeAdapter.MAX_DIRECT_MEMORY_SIZE;
+	}
 
 	/**
 	 * {@inheritDoc}

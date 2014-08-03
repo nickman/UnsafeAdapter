@@ -119,4 +119,16 @@ public interface MemoryMBean {
 	 */
 	public long getReferenceQueueSize();
 	
+	/**
+	 * Returns the maximum amount of allocatable direct buffer memory in bytes.
+	 * @return the maximum amount of allocatable direct buffer memory
+	 */
+	public long getMaxDirectMemory();
+	
+	/**
+	 * Returns the approximate number of objects for which finalization is pending.
+	 * @return the approximate number objects for which finalization is pending.
+	 */
+	public int getPendingFinalizationCount();
+	
 }

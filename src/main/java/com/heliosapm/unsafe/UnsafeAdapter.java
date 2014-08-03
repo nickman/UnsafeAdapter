@@ -75,6 +75,15 @@ public class UnsafeAdapter {
     public static final int DOUBLE_SIZE = 8;    
     /** The byte size of a <b><code>long</code></b> */
     public static final int LONG_SIZE = 8;
+    /** The size of a <b><code>long[]</code></b> array offset */
+    public final static int LONG_ARRAY_OFFSET;
+    
+    
+    /** The maximum direct memory allocation size in bytes 
+     * Can be overriden by the JVM launch option <b><code>-XX:MaxDirectMemorySize=&lt;size&gt;</code></b>.
+     */
+    public static final long MAX_DIRECT_MEMORY_SIZE;
+    
     
     /** Byte array offset */
     public static final int BYTES_OFFSET;
@@ -130,11 +139,22 @@ public class UnsafeAdapter {
         FIVE_COPY = copyMemCount>1;
         FOUR_SET = setMemCount>1;
 		// =========================================================
+		// Attempt to get the max direct memory size
+		// =========================================================        
+        long tmpSz = -1L;
+        try {
+        	tmpSz = (Long)ReflectionHelper.invoke(Class.forName("sun.misc.VM"), "maxDirectMemory");
+        } catch (Throwable t) {
+        	tmpSz = 64 * 1024 * 1024;
+        }
+        MAX_DIRECT_MEMORY_SIZE = tmpSz;
+		// =========================================================
 		// Get the sizes of commonly used references
 		// =========================================================        
         ADDRESS_SIZE = theUNSAFE.addressSize();
         BYTES_OFFSET = theUNSAFE.arrayBaseOffset(byte[].class);
         OBJECTS_OFFSET = theUNSAFE.arrayBaseOffset(Object[].class);
+        LONG_ARRAY_OFFSET = theUNSAFE.arrayBaseOffset(long[].class);
         adapter = getAdapter();
 	}
 	
@@ -506,7 +526,7 @@ public class UnsafeAdapter {
 	 * As of 1.4.1, offsets for fields are represented as long values,
 	 * although the Sun JVM does not use the most significant 32 bits.
 	 * However, JVM implementations which store static fields at absolute
-	 * addresses can use long offsets and null base pointers to express
+	 * keyAddresses can use long offsets and null base pointers to express
 	 * the field locations in a form usable by #getInt(Object,long) . (TODO: Fill in this ref.)
 	 * Therefore, code which will be ported to such JVMs on 64-bit platforms
 	 * must preserve all bits of static field offsets.
@@ -824,9 +844,9 @@ public class UnsafeAdapter {
 	 * the offset supplies an absolute base address.
 	 * 
 	 * The transfers are in coherent (atomic) units of a size determined
-	 * by the address and length parameters.  If the effective addresses and
+	 * by the address and length parameters.  If the effective keyAddresses and
 	 * length are all even modulo 8, the transfer takes place in 'long' units.
-	 * If the effective addresses and length are (resp.) even modulo 4 or 2,
+	 * If the effective keyAddresses and length are (resp.) even modulo 4 or 2,
 	 * the transfer takes place in units of 'int' or 'short'.
 	 * @param srcBase The source object. Can be null, in which case srcOffset will be assumed to be an absolute address.
 	 * @param srcOffset The source object offset, or an absolute adress if srcBase is null

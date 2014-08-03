@@ -14,8 +14,8 @@ package com.heliosapm.unsafe;
 
 public interface Deallocatable {
 	/**
-	 * Returns the addresses to be deallocated
-	 * @return the addresses to be deallocated
+	 * Returns the keyAddresses to be deallocated
+	 * @return the keyAddresses to be deallocated
 	 */
 	public long[][] getAddresses();
 	

@@ -29,7 +29,7 @@ import java.lang.ref.ReferenceQueue;
 
 /**
  * <p>Title: AllocationPointer</p>
- * <p>Description: A container for managing deallocatable memory block addresses</p>
+ * <p>Description: A container for managing deallocatable memory block keyAddresses</p>
  * <p><b>Decidedly not thread safe.</b></p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
@@ -86,8 +86,8 @@ public class AllocationPointer implements ReferenceProvider<AllocationPointer>, 
 	}
 	
 	/**
-	 * Creates a new AllocationPointer with no allocation tracking and loads the passed addresses.
-	 * @param addresses The addresses to load into this AllocationPointer.
+	 * Creates a new AllocationPointer with no allocation tracking and loads the passed keyAddresses.
+	 * @param keyAddresses The keyAddresses to load into this AllocationPointer.
 	 */
 	public AllocationPointer(final long[] addresses) {
 		this(addresses, false);
@@ -95,8 +95,8 @@ public class AllocationPointer implements ReferenceProvider<AllocationPointer>, 
 	
 	
 	/**
-	 * Creates a new AllocationPointer and loads the passed addresses.
-	 * @param addresses The addresses to load into this AllocationPointer.
+	 * Creates a new AllocationPointer and loads the passed keyAddresses.
+	 * @param keyAddresses The keyAddresses to load into this AllocationPointer.
 	 * @param trackAllocations true to enable allocation tracking, false otherwise
 	 */
 	public AllocationPointer(final long[] addresses, final boolean trackAllocations) {
@@ -131,8 +131,8 @@ public class AllocationPointer implements ReferenceProvider<AllocationPointer>, 
 	}
 	
 	/**
-	 * Returns the slotted addresses as a {@link Deallocatable} array of longs
-	 * @return an array of addresses
+	 * Returns the slotted keyAddresses as a {@link Deallocatable} array of longs
+	 * @return an array of keyAddresses
 	 */
 	public final long[][] getAddresses() {
 		return _address;
@@ -192,7 +192,7 @@ public class AllocationPointer implements ReferenceProvider<AllocationPointer>, 
 	
 	/**
 	 * Returns the detailed state of this AllocationPointer
-	 * @return a string outlining the summary and each of the addresses
+	 * @return a string outlining the summary and each of the keyAddresses
 	 */
 	public final String dump() {
 		return AllocationPointerOperations.dump(_address[0][0]);

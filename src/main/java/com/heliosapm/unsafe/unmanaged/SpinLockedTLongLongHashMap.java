@@ -7,7 +7,7 @@ import gnu.trove.map.hash.TLongLongHashMap;
 
 /**
  * <p>Title: SpinLockedTLongLongHashMap</p>
- * <p>Description: </p>
+ * <p>Description: {@link MemSpinLock} guarded version of {@link TLongLongHashMap}</p>
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><b><code>com.heliosapm.unsafe.unmanaged.SpinLockedTLongLongHashMap</code></b>
