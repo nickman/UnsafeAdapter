@@ -207,15 +207,16 @@ abstract public class UnsafeTLongLongHash extends UnsafeTPrimitiveHash {
     }
 
     
-    protected void rehash( int newCapacity ) {
-    	super.rehash(newCapacity);
-    	try {
-    		keyAddresses[0][0] = unsafe.reallocateMemory(keyAddresses[0][0], 4 + (newCapacity << 3));
-    	} catch (IllegalArgumentException iae) {
-    		System.err.println("Failed to reallocate for new capacity [" + newCapacity + "] requiring memory of [" + (4 + (newCapacity << 3)) + "]");
-    	}
-    	unsafe.putInt(keyAddresses[0][0], newCapacity);
-    }
+//    protected void rehash( int newCapacity ) {
+//    	System.out.println("Rehashing UnsafeTLongLongHash");
+//    	super.rehash(newCapacity);
+//    	try {
+//    		keyAddresses[0][0] = unsafe.reallocateMemory(keyAddresses[0][0], 4 + (newCapacity << 3));
+//    	} catch (IllegalArgumentException iae) {
+//    		throw new Error("Failed to reallocate for new capacity [" + newCapacity + "] requiring memory of [" + (4 + (newCapacity << 3)) + "]");
+//    	}
+//    	unsafe.putInt(keyAddresses[0][0], newCapacity);
+//    }
     
     public final void Arraysfill(final long address, final long value) {
     	final int len = unsafe.getInt(address);
@@ -380,15 +381,13 @@ abstract public class UnsafeTLongLongHash extends UnsafeTPrimitiveHash {
                      if (firstRemoved != -1) {
                          insertKeyAt(firstRemoved, val);
                          return firstRemoved;
-                     } else {
-                         consumeFreeSlot = true;
-                         insertKeyAt(index, val);
-                         return index;
-                     }
+                     } 
+                     consumeFreeSlot = true;
+                     insertKeyAt(index, val);
+                     return index;
                  }
 
-//                 if (state == FULL && _set[index] == val) {
-                 if (state == FULL && keyAt(index) == val) {
+                 if (state == FULL && stateAt(index) == val) {
                      return -index - 1;
                  }
 
@@ -405,6 +404,7 @@ abstract public class UnsafeTLongLongHash extends UnsafeTPrimitiveHash {
              // Can a resizing strategy be found that resizes the set?
              throw new IllegalStateException("No free or removed slots available. Key set full?!!");
          }
+         
 
          void insertKeyAt(int index, long val) {
 //             _set[index] = val;  // insert value

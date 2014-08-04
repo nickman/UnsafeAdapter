@@ -40,14 +40,15 @@ import org.openjdk.jmh.annotations.State;
  */
 @State(Scope.Thread)
 public class BenchmarkTroveLongLongMap {
-	protected int initialSize = 4214397;
-	protected int maxSize = 4214397;
+	protected int maxSize = 3214397;
+	protected int initialSize = 1024;
+	
 	protected float loadFactor = 0.75f;
 	protected long NULL = -1L;
 	
 	
 
-	@Benchmark	
+//	@Benchmark	
 	public int testTroveLongLongMap() {
 		final TLongLongHashMap map = new TLongLongHashMap(initialSize, loadFactor, NULL, NULL);   
 		int errors = 0;
@@ -75,18 +76,24 @@ public class BenchmarkTroveLongLongMap {
 	    	for(int i = 0; i < maxSize; i++) {
 	    		long x = map.get(i);
 	    		if(x!=i) {
+//	    			log("Err. Got [%s] but expected [%s]", x, i);
 	    			errors++;
 	    		}
 	    	}
+//	    	log("Done: %s, errors: %s", map.size(), errors);
 	    	return errors;
 		} finally {
 			map.free();
 		}
 		
-    	//log("Done: %s, errors: %s", map.size(), errors);
+    	
 	}
 	
-	
+	public static void main(String[] args)  {
+		for(int i = 0; i < 5; i++) {
+			new BenchmarkTroveLongLongMap().testUnsafeTroveLongLongMap();
+		}
+	}
 	
 //	public static void main(String[] args) throws RunnerException {
 //		log("Starting Benchmarks on BenchmarkTroveLongLongMap");
@@ -100,7 +107,7 @@ public class BenchmarkTroveLongLongMap {
 //    }	
 	
     public static void log(Object fmt, Object...args) {
-//    	System.out.println(String.format(fmt.toString(), args));
+    	System.out.println(String.format(fmt.toString(), args));
     }
 	
 }

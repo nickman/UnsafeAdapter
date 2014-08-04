@@ -226,17 +226,22 @@ public class UnsafeTLongLongHashMap extends UnsafeTLongLongHash implements TLong
         capacity = super.setUp( initialCapacity );
 //        _values = new long[capacity];
         addresses[0][0] = unsafe.allocateMemory(4 + (capacity << 3));
+        unsafe.putInt(addresses[0][0], initialCapacity);
         return capacity;
     }
 
-
+    protected int rehashes = 0;
+    
     /**
      * rehashes the map to the new capacity.
      *
      * @param newCapacity an <code>int</code> value
      */
      /** {@inheritDoc} */
-    protected void rehash( int newCapacity ) {
+    @SuppressWarnings("restriction")
+	protected void rehash( int newCapacity ) {
+    	rehashes++;
+    	System.out.println("Rehashing: #" + rehashes);
 //        int oldCapacity = _set.length;
 //        
 //        long oldKeys[] = _set;
@@ -251,12 +256,31 @@ public class UnsafeTLongLongHashMap extends UnsafeTLongLongHash implements TLong
 //            if( oldStates[i] == FULL ) {
 //                long o = oldKeys[i];
 //                int index = insertKey( o );
-//                valueAt(index,  oldVals[i];
+//                _values[index] = oldVals[i];
 //            }
 //        }
-    	super.rehash(newCapacity);
+    	
+    	final int oldCapacity = unsafe.getInt(addresses[0][0]);
+    	final long newLongSpaceOffset = (oldCapacity << 3) + 4;
+    	final long newLongSpaceSize = (newCapacity - oldCapacity) << 3; 
+
+    	final long newByteSpaceOffset = (oldCapacity) + 4;
+    	final long newByteSpaceSize = (newCapacity - oldCapacity); 
+
+    	
     	addresses[0][0] = unsafe.reallocateMemory(addresses[0][0], 4 + (newCapacity << 3));
+    	keyAddresses[0][0] = unsafe.reallocateMemory(keyAddresses[0][0], 4 + (newCapacity << 3));
+    	stateAddresses[0][0] = unsafe.reallocateMemory(stateAddresses[0][0], 4 + newCapacity);
+    	
+    	
     	unsafe.putInt(addresses[0][0], newCapacity);
+    	unsafe.putInt(keyAddresses[0][0], newCapacity);
+    	unsafe.putInt(stateAddresses[0][0], newCapacity);
+    	
+    	unsafe.setMemory(addresses[0][0] + newLongSpaceOffset, newLongSpaceSize, ZERO_BYTE);
+    	unsafe.setMemory(keyAddresses[0][0] + newLongSpaceOffset, newLongSpaceSize, ZERO_BYTE);
+    	unsafe.setMemory(stateAddresses[0][0] + newByteSpaceOffset, newByteSpaceSize, ZERO_BYTE);
+    	System.out.println("Sizes  [ values: " +  unsafe.getInt(addresses[0][0]) + ", keys: " + unsafe.getInt(keyAddresses[0][0]) + ", state: " + unsafe.getInt(stateAddresses[0][0]) + "]");
     }
 
 

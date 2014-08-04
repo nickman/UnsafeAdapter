@@ -127,10 +127,15 @@ public abstract class UnsafeTPrimitiveHash extends THash {
         setUp( HashFunctions.fastCeil( initialCapacity / loadFactor ) );
     }
 
-    protected void rehash( int newCapacity ) {
-    	stateAddresses[0][0] = unsafe.reallocateMemory(stateAddresses[0][0], 4 + (newCapacity));
-    	unsafe.putInt(stateAddresses[0][0], newCapacity);
-    }
+//    protected void rehash( int newCapacity ) {
+//    	System.out.println("Rehashing UnsafeTPrimitiveHash");
+//    	final int currentSize = unsafe.getInt(stateAddresses[0][0]);
+//    	final long newCapOffset = currentSize + 4;
+//    	final long bytesToInit = newCapacity - currentSize; 
+//    	stateAddresses[0][0] = unsafe.reallocateMemory(stateAddresses[0][0], 4 + (newCapacity));
+//    	unsafe.putInt(stateAddresses[0][0], newCapacity);
+//    	
+//    }
     
     public final void Arraysfill(final long address, final byte value) {
     	final int len = unsafe.getInt(address);
