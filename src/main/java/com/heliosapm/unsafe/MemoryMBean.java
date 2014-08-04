@@ -131,4 +131,10 @@ public interface MemoryMBean {
 	 */
 	public int getPendingFinalizationCount();
 	
+	/**
+	 * Indicates if safe memory is allocated off-heap. Only applicable is safe memory is enabled.
+	 * @return true if safe memory and off-heap are both enabled, false otherwise
+	 */
+	public boolean isSafeMemoryOffHeap();
+	
 }

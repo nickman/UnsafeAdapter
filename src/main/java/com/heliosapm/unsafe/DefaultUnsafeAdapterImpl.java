@@ -150,6 +150,49 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 		return instance;
 	}
 
+	/**
+	 * Creates a new DefaultUnsafeAdapterImpl
+	 */
+	protected DefaultUnsafeAdapterImpl() {		
+		// =========================================================
+		// Start the cleaner thread
+		// =========================================================
+		cleanerThread = new Thread(this, "UnsafeMemoryAllocationCleaner#" + cleanerSerial.incrementAndGet());
+		cleanerThread.setDaemon(true);
+		cleanerThread.setPriority(Thread.MAX_PRIORITY);
+		cleanerThread.start();
+		
+		// =========================================================
+		// Read the system props to get the configuration
+		// =========================================================        
+    	trackMem = System.getProperties().containsKey(UnsafeAdapter.TRACK_ALLOCS_PROP) || isDebugAgentLoaded();   
+    	alignMem = System.getProperties().containsKey(UnsafeAdapter.ALIGN_ALLOCS_PROP);
+		// =========================================================
+		// Initialize the memory allocation tracking if enabled.
+    	// Otherwise, set to null.
+		// =========================================================            	
+    	if(trackMem) {
+    		totalAllocationCount = new AtomicLong(0L);
+    		totalMemoryAllocated = new AtomicLong(0L);
+    		totalAlignmentOverhead = new AtomicLong(0L);
+        	if(this.getClass()==DefaultUnsafeAdapterImpl.class) {
+        		memoryAllocations = new SpinLockedTLongLongHashMap();
+        		alignmentOverheads = new SpinLockedTLongLongHashMap();
+        	} else {
+        		log("Unsafe issue  --->  [%s] != [%s]", this.getClass().getName(), DefaultUnsafeAdapterImpl.class.getName());
+        		memoryAllocations = null;
+        		alignmentOverheads = null;
+        	}
+    	} else {
+    		totalAllocationCount = null;
+    		memoryAllocations = null;
+    		totalMemoryAllocated = null;
+    		totalAlignmentOverhead = null;
+    		alignmentOverheads = null;
+    	}    	
+    	registerJmx();
+	}
+	
 	
 	/**
 	 * <b>TEST HOOK ONLY !</b>
@@ -253,47 +296,6 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	}
 
 	
-	/**
-	 * Creates a new DefaultUnsafeAdapterImpl
-	 */
-	protected DefaultUnsafeAdapterImpl() {		
-		// =========================================================
-		// Start the cleaner thread
-		// =========================================================
-		cleanerThread = new Thread(this, "UnsafeMemoryAllocationCleaner#" + cleanerSerial.incrementAndGet());
-		cleanerThread.setDaemon(true);
-		cleanerThread.setPriority(Thread.MAX_PRIORITY);
-		cleanerThread.start();
-		
-		// =========================================================
-		// Read the system props to get the configuration
-		// =========================================================        
-    	trackMem = System.getProperties().containsKey(UnsafeAdapter.TRACK_ALLOCS_PROP) || isDebugAgentLoaded();   
-    	alignMem = System.getProperties().containsKey(UnsafeAdapter.ALIGN_ALLOCS_PROP);
-		// =========================================================
-		// Initialize the memory allocation tracking if enabled.
-    	// Otherwise, set to null.
-		// =========================================================            	
-    	if(trackMem) {
-    		totalAllocationCount = new AtomicLong(0L);
-    		totalMemoryAllocated = new AtomicLong(0L);
-    		totalAlignmentOverhead = new AtomicLong(0L);
-        	if(this.getClass()==DefaultUnsafeAdapterImpl.class) {
-        		memoryAllocations = new SpinLockedTLongLongHashMap();
-        		alignmentOverheads = new SpinLockedTLongLongHashMap();
-        	} else {
-        		memoryAllocations = null;
-        		alignmentOverheads = null;
-        	}
-    	} else {
-    		totalAllocationCount = null;
-    		memoryAllocations = null;
-    		totalMemoryAllocated = null;
-    		totalAlignmentOverhead = null;
-    		alignmentOverheads = null;
-    	}    	
-    	registerJmx();
-	}
 
 	/**
 	 * Registers the Unsafe Memory Allocator's JMX MBean
@@ -1200,6 +1202,15 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	@Override
 	public boolean isTrackingEnabled() {
 		return this.trackMem;
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#isSafeMemoryOffHeap()
+	 */
+	@Override
+	public boolean isSafeMemoryOffHeap() {
+		return false;
 	}
 
 	/**

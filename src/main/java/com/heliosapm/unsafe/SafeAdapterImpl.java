@@ -197,6 +197,16 @@ public class SafeAdapterImpl extends DefaultUnsafeAdapterImpl implements SafeAda
 	// ====================================================================================================================
 	
 	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#isSafeMemoryOffHeap()
+	 */
+	@Override
+	public boolean isSafeMemoryOffHeap() {
+		return !allocator.onHeap;
+	}
+	
+	
+	/**
 	 * Returns the total off-heap allocated memory in bytes
 	 * @return the total off-heap allocated memory
 	 */

@@ -27,6 +27,7 @@ package test.com.heliosapm.unsafe;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.Assert;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.heliosapm.unsafe.JMXHelper;
@@ -41,21 +42,20 @@ import com.heliosapm.unsafe.UnsafeAdapter;
  * <p><code>test.com.heliosapm.unsafe.BasicAllocationsTest</code></p>
  */
 @SuppressWarnings("restriction")
+@UnsafeAdapterConfiguration()
 public class BasicAllocationsTest extends BaseTest {
-	/** Indicates if the baseline has been set for this class */
-	static final AtomicBoolean baselineSet = new AtomicBoolean(false);
-	
 
-	{
-		if(baselineSet.compareAndSet(false, true)) {
-			System.clearProperty(UnsafeAdapter.SAFE_MANAGER_PROP);
-			System.clearProperty(UnsafeAdapter.TRACK_ALLOCS_PROP);
-			ReflectionHelper.invoke(UnsafeAdapter.class, "reset");
-			Assert.assertFalse("Adapter was not set to unsafe", UnsafeAdapter.isSafeAdapter());		
-			Assert.assertTrue("Unsafe Adapter MBean Was Not Registered", JMXHelper.getDefaultMBeanServer().isRegistered(UnsafeAdapter.UNSAFE_MEM_OBJECT_NAME));
-			Assert.assertFalse("Safe Adapter MBean Was Registered", JMXHelper.getDefaultMBeanServer().isRegistered(UnsafeAdapter.SAFE_MEM_OBJECT_NAME));
-			log(UnsafeAdapter.printStatus());
-		}
+	// Set the adapter configuration to the defaults
+//	{
+//		UnsafeAdapterConfigurator.setConfiguration(this);
+//	}
+
+	/**
+	 * Enables the default UnsafeAdapter configuration
+	 */
+	@BeforeClass
+	public static void enableMemTracking() {
+		UnsafeAdapterConfigurator.setConfiguration(BasicAllocationsTest.class);
 	}
 
 

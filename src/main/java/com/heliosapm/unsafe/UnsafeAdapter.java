@@ -53,6 +53,8 @@ public class UnsafeAdapter {
 	public static final String TRACK_ALLOCS_PROP = "unsafe.allocations.track";
 	/** The system prop indicating that allocations should be alligned */
 	public static final String ALIGN_ALLOCS_PROP = "unsafe.allocations.align";
+	/** The system prop indicating if safe allocations should be on heap */
+	public static final String SAFE_ALLOCS_ONHEAP_PROP = "safe.allocations.onheap";	
 	
     /** The unsafe instance */    
 	static final Unsafe theUNSAFE;
@@ -96,8 +98,6 @@ public class UnsafeAdapter {
 	public static final ObjectName SAFE_MEM_OBJECT_NAME = JMXHelper.objectName("com.heliosapm.unsafe:service=MemoryAllocationService,type=safe");
 	/** The JMX ObjectName for the currently enabled memory allocation JMX management interface MBean */
 	public static final ObjectName MEM_OBJECT_NAME = JMXHelper.objectName("com.heliosapm.unsafe:service=MemoryAllocationService");
-	/** The system prop indicating if safe allocations should be on heap */
-	public static final String SAFE_ALLOCS_ONHEAP_PROP = "safe.allocations.onheap";	
 
 	/** The max 32bit memory size that can be cache-line aligned */
 	public static final int MAX_ALIGNED_MEM_32 = 1073741824;

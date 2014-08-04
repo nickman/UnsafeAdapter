@@ -74,6 +74,8 @@ import sun.misc.Unsafe;
 public class BaseTest {
 	/** The currently executing test name */
 	@Rule public final TestName name = new TestName();
+	/** The currently executing class name */
+	@Rule public final TestClass cname = new TestClass();
 	/** A random value generator */
 	protected static final Random RANDOM = new Random(System.currentTimeMillis());
 	

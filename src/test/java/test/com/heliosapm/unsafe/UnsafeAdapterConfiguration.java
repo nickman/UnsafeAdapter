@@ -24,26 +24,39 @@
  */
 package test.com.heliosapm.unsafe;
 
-import org.junit.BeforeClass;
+import java.lang.annotation.Documented;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 /**
- * <p>Title: ManagedAllocationsTest</p>
- * <p>Description: The same tests executed in {@link BasicAllocationsTest} but with mem-tracking enabled.</p> 
+ * <p>Title: UnsafeAdapterConfiguration</p>
+ * <p>Description: Annotation to configure the UnsafeAdapter configuration for the class under test</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
- * <p><code>test.com.heliosapm.unsafe.ManagedAllocationsTest</code></p>
+ * <p><code>test.com.heliosapm.unsafe.UnsafeAdapterConfiguration</code></p>
  */
-@UnsafeAdapterConfiguration(memTracking=true)
-public class ManagedAllocationsTest extends BasicAllocationsTest {
-	// Enables memory tracking 
-//	{
-//		UnsafeAdapterConfigurator.setConfiguration(this);
-//	}
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+public @interface UnsafeAdapterConfiguration {
 	/**
-	 * Enables memory tracking 
+	 * true if memory allocations should be unsafe, false if safe
 	 */
-	@BeforeClass
-	public static void enableMemTracking() {
-		UnsafeAdapterConfigurator.setConfiguration(ManagedAllocationsTest.class);
-	}
+	public boolean unsafe() default true;
+	/**
+	 * true to enable memory tracking, false otherwise
+	 */
+	public boolean memTracking() default false;	
+	/**
+	 * true to enable cache-line memory alignment, false otherwise
+	 */
+	public boolean memAlignment() default false;
+	
+	/**
+	 * true if safe memory allocation should be off-heap, false otherwise.
+	 * Only applicable if {@link #unsafe()} is false.
+	 */
+	public boolean offHeap() default false;
 }

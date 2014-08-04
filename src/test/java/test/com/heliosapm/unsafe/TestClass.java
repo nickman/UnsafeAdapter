@@ -24,26 +24,43 @@
  */
 package test.com.heliosapm.unsafe;
 
-import org.junit.BeforeClass;
+import org.junit.rules.TestWatcher;
+import org.junit.runner.Description;
+import org.junit.runners.model.Statement;
 
 /**
- * <p>Title: ManagedAllocationsTest</p>
- * <p>Description: The same tests executed in {@link BasicAllocationsTest} but with mem-tracking enabled.</p> 
+ * <p>Title: TestClass</p>
+ * <p>Description: Test rule to expose the class name being tested</p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
- * <p><code>test.com.heliosapm.unsafe.ManagedAllocationsTest</code></p>
+ * <p><code>test.com.heliosapm.unsafe.TestClass</code></p>
  */
-@UnsafeAdapterConfiguration(memTracking=true)
-public class ManagedAllocationsTest extends BasicAllocationsTest {
-	// Enables memory tracking 
-//	{
-//		UnsafeAdapterConfigurator.setConfiguration(this);
-//	}
+
+public class TestClass extends TestWatcher {
+	private String className;
+	
 	/**
-	 * Enables memory tracking 
+	 * {@inheritDoc}
+	 * @see org.junit.rules.TestWatcher#starting(org.junit.runner.Description)
 	 */
-	@BeforeClass
-	public static void enableMemTracking() {
-		UnsafeAdapterConfigurator.setConfiguration(ManagedAllocationsTest.class);
+	@Override
+	protected void starting(Description d) {
+		className = d.getClassName();
+	}
+	
+	@Override
+	public Statement apply(Statement base, Description d) {
+		className = d.getClassName();
+		return super.apply(base, d);
+	}
+	
+	
+
+	/**
+	 * Returns the name of the currently-running test class
+	 * @return the name of the currently-running test class
+	 */
+	public String getClassName() {
+		return className;
 	}
 }
