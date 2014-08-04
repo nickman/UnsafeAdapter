@@ -28,13 +28,14 @@
  		<high-scale-lib.version>1.1.4</high-scale-lib.version>
 		<!-- Plugin Versions -->
 		<jar-plugin.version>2.3</jar-plugin.version>
+		<compiler.version>3.1</compiler.version>
 		<source-plugin.version>2.2</source-plugin.version>
 		<javadoc-plugin.version>2.9</javadoc-plugin.version>
 		<jar-plugin.version>2.4</jar-plugin.version>
 		<eclipse-plugin.version>2.9</eclipse-plugin.version>
 		<surefire.version>2.16</surefire.version>
 		<cobertura.version>2.5.1</cobertura.version>
-		<shade.version>2.1</shade.version>
+		<shade.version>2.2</shade.version>
     </properties>
 
 		<dependencyManagement>
@@ -54,15 +55,13 @@
 			<dependency>
 			  <groupId>org.openjdk.jmh</groupId>
 			  <artifactId>jmh-core</artifactId>
-			  <version>${jmh.version}</version>
-			  <scope>test</scope>
+			  <version>${jmh.version}</version>			  
 			</dependency>
 			
 	        <dependency>
 	            <groupId>org.openjdk.jmh</groupId>
 	            <artifactId>jmh-generator-annprocess</artifactId>
-	            <version>${jmh.version}</version>
-	            <scope>test</scope>
+	            <version>${jmh.version}</version>	            
 	        </dependency>
 			
 	
@@ -99,7 +98,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>${jar-plugin.version}</version>
+                <version>${compiler.version}</version>
                 <configuration>
                     <source>${compiler-source.version}</source>
                     <target>${compiler-target.version}</target>
