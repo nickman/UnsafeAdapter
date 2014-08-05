@@ -34,9 +34,13 @@ import java.lang.ref.ReferenceQueue;
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>com.heliosapm.unsafe.AllocationPointer.AllocationPointerPhantomRef</code></p>
  */
-class AllocationPointerPhantomRef extends PhantomReference<Object> {
+class AllocationPointerPhantomRef extends PhantomReference<Object> implements AllocationTracker {
 	/** The address that the referenced AllocationPointer pointed to */
 	private final long[][] address;
+	
+	/** The UnsafeAdapter provided reference id */
+	private final long refId;
+
 	
 	/** A copy of the original addresses once the allocations have been cleared.
 	 *   Copied for allocation tracking
@@ -48,10 +52,20 @@ class AllocationPointerPhantomRef extends PhantomReference<Object> {
 	 * @param referent The AllocationPointer to be referenced
 	 * @param address The actual reference to the {@link AllocationPointer}'s address long array.
 	 * @param refQueue The reference queue to register with
+	 * @param refId The UnsafeAdapter provided reference id
 	 */
-	AllocationPointerPhantomRef(AllocationPointer referent, long[][] address, ReferenceQueue<Object> refQueue) {
+	AllocationPointerPhantomRef(AllocationPointer referent, long[][] address, ReferenceQueue<Object> refQueue, long refId) {
 		super(referent, refQueue);
 		this.address = address;
+		this.refId = refId;
+	}
+	
+	/**
+	 * Returns the UnsafeAdapter provided reference id
+	 * @return the UnsafeAdapter provided reference id
+	 */
+	public long getRefId() {
+		return refId;
 	}
 	
 	/**
@@ -79,4 +93,50 @@ class AllocationPointerPhantomRef extends PhantomReference<Object> {
 		}
 		super.clear();
 	}
+	
+	
+	// ////////////////////////////////////////////////////////////////
+	//  TODO:  These ops must be implemented in Ops.
+	// ////////////////////////////////////////////////////////////////
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.AllocationTracker#add(long, long, long)
+	 */
+	@Override
+	public void add(long address, long allocationSize, long alignmentOverhead) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.AllocationTracker#getAllocationSize(long)
+	 */
+	@Override
+	public long getAllocationSize(long address) {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.AllocationTracker#getAlignmentOverhead(long)
+	 */
+	@Override
+	public long getAlignmentOverhead(long address) {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.AllocationTracker#clearAddress(long)
+	 */
+	@Override
+	public void clearAddress(long address) {
+		// TODO Auto-generated method stub
+		
+	}
+
 }

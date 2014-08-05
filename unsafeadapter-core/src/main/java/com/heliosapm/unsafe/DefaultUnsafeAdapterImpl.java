@@ -52,7 +52,7 @@ import com.heliosapm.unsafe.ReflectionHelper.ReferenceQueueLengthReader;
  * <p><code>com.heliosapm.unsafe.DefaultUnsafeAdapterImpl</code></p>
  */
 @SuppressWarnings({"restriction", "static-method"})
-public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterImplMBean {
+public class DefaultUnsafeAdapterImpl implements DefaultUnsafeAdapterImplMBean {
 	// =========================================================
 	//  Singleton
 	// =========================================================
@@ -92,46 +92,13 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	public final boolean alignMem;
 	/** The unsafe memory management MBean */
 	final MemoryMBean unsafeMemoryStats = null;
+	/** The allocation ref manager */
+	final AllocationReferenceManager refMgr; 
 	
 	
 	 
 
 	
-	// =========================================================
-	//  Memory Tracking
-	// =========================================================
-	/** A map of phantom refs */
-	final NonBlockingHashMapLong<Reference<Object>> phantomRefs = new NonBlockingHashMapLong<Reference<Object>>(1024, true); 
-	/** The interface tracker to cache which classes implement "special" UnsafeAdapter interfaces */
-	final InterfaceTracker ifaceTracker = new InterfaceTracker();
-    /** Serial number factory for memory allocationreferences */
-	protected final AtomicLong phantomSerial = new AtomicLong(0L);
-	
-	
-	/** A map of memory allocation sizes keyed by the memory block address */
-//	final SpinLockedTLongLongHashMap memoryAllocations;
-	final NonBlockingHashMapLong<Long> memoryAllocations;
-	/** A map of memory allocation alignment overhead sizes keyed by the memory block address */
-//	final SpinLockedTLongLongHashMap alignmentOverheads;
-	final NonBlockingHashMapLong<Long> alignmentOverheads;
-	
-	/** The total native memory allocation */
-	final AtomicLong totalMemoryAllocated;
-	/** The total number of native memory allocations */
-	final AtomicLong totalAllocationCount;
-	/** The total native memory allocation overhead for alignment */
-	final AtomicLong totalAlignmentOverhead;
-	// =========================================================
-	//  Auto Deallocation
-	// =========================================================			
-    /** A map of memory allocation references keyed by an internal counter */
-    final NonBlockingHashMapLong<AllocationPointer> deAllocs = new NonBlockingHashMapLong<AllocationPointer>(1024, false);
-	/** The reference queue where collected allocations go */
-	final ReferenceQueue<Object> refQueue = new ReferenceQueue<Object>();
-	/** The queue length reader for the reference queue */
-	final ReferenceQueueLengthReader<?> refQueueLengthReader = ReflectionHelper.newReferenceQueueLengthReader(refQueue);
-	/** The reference cleaner thread */
-	Thread cleanerThread;
 
     // =========================================================
 	
@@ -154,45 +121,13 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	 * Creates a new DefaultUnsafeAdapterImpl
 	 */
 	protected DefaultUnsafeAdapterImpl() {		
-		// =========================================================
-		// Start the cleaner thread
-		// =========================================================
-		cleanerThread = new Thread(this, "UnsafeMemoryAllocationCleaner#" + cleanerSerial.incrementAndGet());
-		cleanerThread.setDaemon(true);
-		cleanerThread.setPriority(Thread.MAX_PRIORITY);
-		cleanerThread.start();
 		
 		// =========================================================
 		// Read the system props to get the configuration
 		// =========================================================        
     	trackMem = System.getProperties().containsKey(UnsafeAdapter.TRACK_ALLOCS_PROP); // || isDebugAgentLoaded();   
     	alignMem = System.getProperties().containsKey(UnsafeAdapter.ALIGN_ALLOCS_PROP);
-		// =========================================================
-		// Initialize the memory allocation tracking if enabled.
-    	// Otherwise, set to null.
-		// =========================================================            	
-    	if(trackMem) {
-    		totalAllocationCount = new AtomicLong(0L);
-    		totalMemoryAllocated = new AtomicLong(0L);
-    		totalAlignmentOverhead = new AtomicLong(0L);
-        	if(this.getClass()==DefaultUnsafeAdapterImpl.class) {
-//        		memoryAllocations = new SpinLockedTLongLongHashMap(2048, .1f);
-//        		alignmentOverheads = new SpinLockedTLongLongHashMap(2048, .1f);
-        		memoryAllocations = new NonBlockingHashMapLong<Long>(1024, true);
-        		alignmentOverheads = new NonBlockingHashMapLong<Long>(1024, true);
-        		
-        	} else {
-        		log("Unsafe issue  --->  [%s] != [%s]", this.getClass().getName(), DefaultUnsafeAdapterImpl.class.getName());
-        		memoryAllocations = null;
-        		alignmentOverheads = null;
-        	}
-    	} else {
-    		totalAllocationCount = null;
-    		memoryAllocations = null;
-    		totalMemoryAllocated = null;
-    		totalAlignmentOverhead = null;
-    		alignmentOverheads = null;
-    	}    	
+    	refMgr = new AllocationReferenceManager(trackMem, alignMem);
     	registerJmx();
 	}
 	
@@ -209,7 +144,8 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 				JMXHelper.unregisterMBean(UnsafeAdapter.UNSAFE_MEM_OBJECT_NAME);
 				Field instanceField = ReflectionHelper.setFieldEditable(getClass(), "instance");
 				instanceField.set(null, null);
-				if(cleanerThread!=null) cleanerThread.interrupt(); 
+				//if(cleanerThread!=null) cleanerThread.interrupt();
+				// FIXME: delegate to Alloc Mgr
 			}
 		} catch (Throwable t) {
 			loge("Failed to reset UnsafeAdapter", t);
@@ -218,80 +154,6 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	
 	
 	
-	/**
-	 * Creates a new DeallocationPhantomReference
-	 * @param referent The deallocatable to create the reference for
-	 */
-	
-	final void newDeallocationPhantomReference(Deallocatable referent) {
-		DeallocationPhantomReference phantom = new DeallocationPhantomReference(referent, refQueue);
-		phantomRefs.put(phantom.id, phantom);
-	}
-	
-	
-	/**
-	 * <p>Title: DeallocationPhantomReference</p>
-	 * <p>Description: A phantom reference extension for tracking {@link Deallocatable} instance enqueueing </p> 
-	 * <p>Company: Helios Development Group LLC</p>
-	 * @author Whitehead (nwhitehead AT heliosdev DOT org)
-	 * <p><code>com.heliosapm.unsafe.DefaultUnsafeAdapterImpl.DeallocationPhantomReference</code></p>
-	 */
-	class DeallocationPhantomReference extends PhantomReference<Object> implements Deallocatable {
-		/** The keyAddresses to deallocate when this reference is enqueued */
-		final long[][] addresses;
-		/** The unique serial number for this reference */
-		final long id;
-		
-		/**
-		 * Creates a new DeallocationPhantomReference
-		 * @param referent The deallocatable to create the reference for
-		 * @param refQueue The reference queue
-		 */
-		@SuppressWarnings("unchecked") 
-		DeallocationPhantomReference(Deallocatable referent, ReferenceQueue<Object> refQueue) {
-			super(referent, refQueue);
-			this.addresses = referent.getAddresses();
-			id = phantomSerial.incrementAndGet();
-		}
-		
-		
-		/**
-		 * {@inheritDoc}
-		 * @see java.lang.ref.Reference#clear()
-		 */
-		@Override
-		public void clear() {
-			if(addresses!=null && addresses.length>0 && addresses[0].length>0) {
-				for(int x = 0; x < addresses[0].length; x++) {
-					freeMemory(addresses[0][x]);
-					addresses[0][x] = 0;
-				}
-			}
-			phantomRefs.remove(id);
-			super.clear();
-		}
-
-		/**
-		 * {@inheritDoc}
-		 * @see com.heliosapm.unsafe.Deallocatable#getAddresses()
-		 */
-		@Override
-		public final long[][] getAddresses() {
-			return addresses;
-		}
-
-		@Override
-		public final long getReferenceId() {
-			return id;
-		}
-
-
-		@Override
-		public final void setReferenceId(long referenceId) {
-			/* No Op */			
-		}
-	}
-
 	
 
 	/**
@@ -306,83 +168,13 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 		}
 	}
 	
-	private final void decrementMemTracking(final long...clearedAddresses) {
-		if(clearedAddresses!=null && clearedAddresses.length>0) {
-			for(final long clearedAddress: clearedAddresses) {				
-				if(!memoryAllocations.contains(clearedAddress)) continue;
-				final long allocSize = memoryAllocations.remove(clearedAddress);
-				if(allocSize>0) {
-					totalMemoryAllocated.addAndGet(allocSize * -1L);
-					totalAllocationCount.decrementAndGet();
-					if(alignMem) {
-						final long alignOverhead = alignmentOverheads.remove(clearedAddress);
-						if(alignOverhead>0) {
-							totalAlignmentOverhead.addAndGet(alignOverhead * -1L);
-						}
-					}
-				}
-			}
-		}
-	}
-	
-	/**
-	 * The cleaner thread entry point.
-	 * {@inheritDoc}
-	 * @see java.lang.Runnable#run()
-	 */
-	public void run() {
-		log("Starting Unsafe Cleaner Thread [%s]", Thread.currentThread().getName());
-		UnsafeAdapter.registerCleanerThread(Thread.currentThread());
-		boolean terminating = false;
-		while(true) {
-			try {
-				Reference<?> ref = refQueue.remove(3000);
-				if(ref==null) {
-					System.gc();
-					continue;
-				}
-//				log("Dequeued Reference [%s]", ref);
-				if(ref!=null) { 
-					ref.clear();
-				}
-				if(ref instanceof AllocationPointerPhantomRef) {
-					
-				}
-				if(trackMem && ref instanceof AllocationPointerPhantomRef) {
-					decrementMemTracking(((AllocationPointerPhantomRef)ref).getClearedAddresses());					
-				} else {
-					if(trackMem && InterfaceTracker.isDeallocatable(ifaceTracker.getMask(ref))) {
-						final long[][] addrs = ((Deallocatable)ref).getAddresses();
-						if(addrs!=null && addrs.length>0) {
-							for(long[] clearedAddresses: addrs) {
-								decrementMemTracking(clearedAddresses);
-							}
-						}
-					}
-				}				
-				if(terminating) {
-					if(getRefQueuePending()<1 && getPendingRefs()<1 ) break;
-				}
-			} catch (InterruptedException e) {
-				if(getRefQueuePending()<1 && getPendingRefs()<1 ) break;
-				terminating=true;
-				Thread.currentThread().setName("[Terminating]" + Thread.currentThread().getName());
-			} catch (Exception e) {
-				loge("Unexpected exception [%s] in cleaner loop. Will Continue.", e);
-			}
-		}
-		cleanerThread = null;
-		log("Unsafe Cleaner Thread [%s] Terminated", Thread.currentThread().getName());
-		UnsafeAdapter.removeCleanerThread(Thread.currentThread());
-		
-	}
 	
 	/**
 	 * Returns the number of pending references in the reference queue
 	 * @return the number of pending references
 	 */
 	public long getRefQueuePending() {
-		return refQueueLengthReader.getQueueLength();
+		return refMgr.getRefQueuePending();
 	}
 	
 
@@ -419,7 +211,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	/**
 	 * Allocates a chunk of memory and returns its address
 	 * @param size The number of bytes to allocate
-	 * @param dealloc The optional deallocatable to register for deallocation when it becomes phantom reachable
+	 * @param memoryManager The optional memory block address manager being used by the caller
 	 * @return The address of the allocated memory
 	 * @see sun.misc.Unsafe#allocateMemory(long)
 	 */
@@ -447,94 +239,32 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	 * The resulting native pointer will never be zero, and will be aligned for all value types.  
 	 * Dispose of this memory by calling #freeMemory , or resize it with #reallocateMemory.
 	 * @param size The size of the block of memory to allocate in bytes
-	 * @param dealloc The optional deallocatable to register for deallocation when it becomes phantom reachable
+	 * @param memoryManager The optional memory block address manager being used by the caller
 	 * @return The address of the allocated memory block
 	 * @see sun.misc.Unsafe#allocateMemory(long)
 	 */
-	public long allocateAlignedMemory(long size, Deallocatable dealloc) {
+	public long allocateAlignedMemory(long size, Object memoryManager) {
 		if(alignMem) {
 			long alignedSize = UnsafeAdapter.ADDRESS_SIZE==4 ? UnsafeAdapter.findNextPositivePowerOfTwo((int)size) : UnsafeAdapter.findNextPositivePowerOfTwo((int)size);
-			return _allocateMemory(alignedSize, alignedSize-size, dealloc);
+			return _allocateMemory(alignedSize, alignedSize-size, memoryManager);
 		}
-		return _allocateMemory(size, 0L, dealloc);		
+		return _allocateMemory(size, 0L, memoryManager);		
 	}
 	
     
 
-//	/**
-//	 * Allocates a chunk of memory and returns its address
-//	 * @param size The number of bytes to allocate
-//	 * @param alignmentOverhead The number of bytes allocated in excess of requested for alignment
-//	 * @param deallocator The reference to the object which when collected will deallocate the referenced keyAddresses
-//	 * @return The address of the allocated memory
-//	 * @see sun.misc.Unsafe#allocateMemory(long)
-//	 */		
-//	long _allocateMemory(long size, long alignmentOverhead, Deallocatable deallocator) {
-//		final long address = UNSAFE.allocateMemory(size);
-//		if(trackMem) {		
-//			memoryAllocations.put(address, size);
-//			totalMemoryAllocated.addAndGet(size);
-//			totalAllocationCount.incrementAndGet();
-//			if(alignmentOverhead>0) {
-//				totalAlignmentOverhead.addAndGet(alignmentOverhead);
-//				alignmentOverheads.put(address, alignmentOverhead); 
-//			}
-//		}
-//    	if(deallocator!=null) {
-//    		long[][] addresses = deallocator.getAddresses();
-//    		if(addresses!=null && addresses.length>0) {    			
-//    			newDeallocationPhantomReference(deallocator );
-//        		if(deallocator instanceof AddressAssignable) {
-//        			((AddressAssignable)deallocator).setAllocated(address);
-//        		}    			
-//    		}
-//    	}		
-//		return address;
-//	}
 	
 	/**
 	 * Allocates a chunk of memory and returns its address
 	 * @param size The number of bytes to allocate
 	 * @param alignmentOverhead The number of bytes allocated in excess of requested for alignment
-	 * @param memoryManager The reference to the object for which the memory is being allocated.
+	 * @param memoryManager The optional memory block address manager being used by the caller
 	 * @return The address of the allocated memory
 	 * @see sun.misc.Unsafe#allocateMemory(long)
-	 */		
-	@SuppressWarnings({ "unchecked", "rawtypes" })
-	long _allocateMemory(long size, long alignmentOverhead, Object memoryManager) {
+	 */			
+	long _allocateMemory(final long size, final long alignmentOverhead, Object memoryManager) {
 		final long address = UNSAFE.allocateMemory(size);
-		final int handlerMask = ifaceTracker.getMask(memoryManager);
-		if(handlerMask!=0) {
-			if(InterfaceTracker.isAllocationPointer(handlerMask)) {
-				AllocationPointer ap = (AllocationPointer)memoryManager;
-				ap.setAllocated(address);
-				Reference<Object> ref = ap.getReference(refQueue);
-				phantomRefs.put(address, ref);
-			} else {
-				if(InterfaceTracker.isReferenceProvider(handlerMask)) {
-					((ReferenceProvider)memoryManager).getReference(refQueue);
-				}
-				if(InterfaceTracker.isDeallocatable(handlerMask)) {
-					Deallocatable d = (Deallocatable)memoryManager;
-					if(d.getReferenceId()==0) {
-						newDeallocationPhantomReference(d);
-					}
-				}
-				if(InterfaceTracker.isAssignable(handlerMask)) {
-					((AddressAssignable)memoryManager).setAllocated(address);
-				}
-			}
-		}
-		if(trackMem) {		
-			
-			memoryAllocations.put(address, (Long)size);
-			totalMemoryAllocated.addAndGet(size);
-			totalAllocationCount.incrementAndGet();
-			if(alignmentOverhead>0) {
-				totalAlignmentOverhead.addAndGet(alignmentOverhead);
-				alignmentOverheads.put(address, (Long)alignmentOverhead); 
-			}
-		}
+		refMgr.allocateMemory(size, alignmentOverhead, memoryManager);
 		return address;
 	}
 	
@@ -550,7 +280,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	 * @see sun.misc.Unsafe#reallocateMemory(long, long)
 	 */
 	public long reallocateMemory(long address, long size) {
-		return _reallocateMemory(address, size, 0);
+		return _reallocateMemory(address, size, 0, null);
 	}	
 	
 	/**
@@ -566,9 +296,9 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	public long reallocateAlignedMemory(long address, long size) {
 		if(alignMem) {
 			long actual = UnsafeAdapter.findNextPositivePowerOfTwo(size);
-			return _reallocateMemory(address, actual, actual-size);
+			return _reallocateMemory(address, actual, actual-size, null);
 		} 
-		return _reallocateMemory(address, size, 0);
+		return _reallocateMemory(address, size, 0, null);
 	}	
 	
 	/**
@@ -579,35 +309,13 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	 * @param address The address of the existing allocation
 	 * @param size The size of the new allocation in bytes
 	 * @param alignmentOverhead The established overhead of the alignment
+	 * @param memoryManager The optional memory block address manager being used by the caller
 	 * @return The address of the new allocation
 	 * @see sun.misc.Unsafe#reallocateMemory(long, long)
 	 */
-	long _reallocateMemory(long address, long size, long alignmentOverhead) {
+	long _reallocateMemory(long address, long size, long alignmentOverhead, Object memoryManager) {
 		long newAddress = UNSAFE.reallocateMemory(address, size);
-		if(trackMem) {
-			// ==========================================================
-			//  Subtract pervious allocation
-			// ==========================================================			
-			long sz = memoryAllocations.remove(address);
-			if(sz!=0) {								
-				totalMemoryAllocated.addAndGet(-1L * sz);				
-			}
-			if(alignMem) {
-				sz = alignmentOverheads.remove(address);
-				if(sz!=0) {								
-					totalAlignmentOverhead.addAndGet(-1L * sz);								
-				}
-			}
-			// ==========================================================
-			//  Add new allocation
-			// ==========================================================		
-			memoryAllocations.put(newAddress, (Long)size);
-			totalMemoryAllocated.addAndGet(size);			
-			if(alignmentOverhead>0) {
-				totalAlignmentOverhead.addAndGet(alignmentOverhead);
-				alignmentOverheads.put(newAddress, (Long)alignmentOverhead); 
-			}
-		}
+		refMgr.reallocateMemory(address, newAddress, size, alignmentOverhead, memoryManager);
 		return newAddress;
 	}
 	
@@ -642,22 +350,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	 */
 	void freeMemory(long address) {
 		if(address<1) return;
-		if(trackMem) {
-			// ==========================================================
-			//  Subtract pervious allocation
-			// ==========================================================
-			totalAllocationCount.decrementAndGet();
-			long sz = memoryAllocations.remove(address);
-			if(sz!=0) {								
-				totalMemoryAllocated.addAndGet(-1L * sz);				
-			}
-			if(alignMem) {
-				sz = alignmentOverheads.remove(address);
-				if(sz!=0) {								
-					totalAlignmentOverhead.addAndGet(-1L * sz);								
-				}
-			}
-		}				
+		UNSAFE.freeMemory(address);
 	}
 	
 	//===========================================================================================================
@@ -1363,7 +1056,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	 */
 	@Override
 	public long getTotalAllocatedMemory() {
-		return trackMem ? totalMemoryAllocated.get() : -1L;
+		return refMgr.getTotalMemoryAllocated();
 	}
 
 	/**
@@ -1372,7 +1065,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	 */
 	@Override
 	public long getAlignedMemoryOverhead() {
-		return alignMem ? totalAlignmentOverhead.get() : -1L;
+		return refMgr.getTotalAlignmentOverhead();
 	}
 
 	/**
@@ -1382,7 +1075,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	@Override
 	public long getTotalAllocatedMemoryKb() {
 		if(trackMem) {
-			long mem = totalMemoryAllocated.get();
+			long mem = refMgr.getTotalMemoryAllocated();
 			return mem < 1 ? 0L : roundMem(mem, 1024);
 		}
 		return -1L;
@@ -1395,7 +1088,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	@Override
 	public long getTotalAllocatedMemoryMb() {
 		if(trackMem) {
-			long mem = totalMemoryAllocated.get();
+			long mem = refMgr.getTotalMemoryAllocated();
 			return mem < 1 ? 0L : roundMem(mem, 1024*1024);
 		}
 		return -1L;
@@ -1418,9 +1111,8 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	 * @see com.heliosapm.unsafe.MemoryMBean#getTotalAllocationCount()
 	 */
 	@Override
-	public int getTotalAllocationCount() {
-		if(!trackMem) return -1;
-		return memoryAllocations.size();
+	public long getTotalAllocationCount() {
+		return refMgr.getTotalAllocationCount();
 	}
 
 	/**
@@ -1429,7 +1121,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	 */
 	@Override
 	public int getPendingRefs() {
-		return deAllocs.size();
+		return refMgr.getPendingRefs();
 	}
 	
 	/**

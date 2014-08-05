@@ -33,6 +33,24 @@ import sun.misc.Unsafe;
  * <p>Description: Static methods for maniplulating an unsafe memory block containing an 
  * array of memory block keyAddresses allocated for a common purpose 
  * and which will be deallocated when the referencing object becomes phantom reachable.</p> 
+ * <p>Structure of AllocationPointer Header:
+ * <pre>
+ *                4 bytes     4 bytes     8 bytes               1 byte
+ *             +----------++----------++-----------------------++----+
+ *             | capacity || size     || reference id          || dim|
+ *             +----------++----------++-----------------------++----+
+ *                 int         int           long                byte
+ *             +----------------------------------------------------->
+ * </pre></p>
+ * <p>Structure of AllocationPointer:
+ * <pre>
+ *                 17 bytes            8 bytes       8 bytes          8 bytes     
+ *             +-------------------++------------++------------    +-------------+
+ *             |  Header           || Slot 1     || Slot 2     ::::| Slot n      |
+ *             +-------------------++------------++------------    +-------------+
+ *                                     long          long             long        
+ *             +------------------------------------------------------------------>                       
+ * </pre></p>
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>com.heliosapm.unsafe.AllocationPointerOperations</code></p>
@@ -43,10 +61,22 @@ public class AllocationPointerOperations {
 	private static final Unsafe unsafe;	
 	/** A zero byte const */
 	public static final byte ZERO_BYTE = 0;
+	/** A one byte const */
+	public static final byte ONE_BYTE = 1;
+	
 	/** The byte size of a long */
 	public static final long LONG_SIZE = 8;
-	/** The size of the memory block header in bytes (2 ints) */
-	public static final int HEADER_SIZE = 8;
+	/** The size of the memory block header in bytes (2 ints, 1 byte and 1 long) */
+	public static final int HEADER_SIZE = 8 + 4 + 4 + 1;
+	
+	/** The capacity offfset */
+	public static final int CAP_OFFSET = 0;
+	/** The size offfset */
+	public static final int SIZE_OFFSET = 4;
+	/** The ref id offfset */
+	public static final int REFID_OFFSET = 8;
+	/** The dimension offfset */
+	public static final int DIM_OFFSET = 16;
 	
 	/** The system prop to override the allocation size */
 	public static final String ALLOC_SIZE_PROP = "allocation.pointer.alloc.size";	
@@ -94,13 +124,25 @@ public class AllocationPointerOperations {
     
 	/**
 	 * Allocates a new AllocationPointerOperations.
+	 * @param memTracking Indicates if memory tracking is enabled
+	 * @param memAlignment Indicates if cache-line memory alignment is enabled 
+	 * @param refId The UnsafeAdapter's ref manager assigned reference id
 	 * @return the address of the created memory block. 
 	 */
-	public static final long newAllocationPointer() {
-		long address = unsafe.allocateMemory(ALLOC_SIZE * ADDRESS_SIZE + 8);
+	static final long newAllocationPointer(boolean memTracking, boolean memAlignment, long refId) {
+		byte dim = ONE_BYTE;
+		if(memTracking) {
+			dim++;
+			if(memAlignment) {
+				dim++;
+			}
+		}
+		long address = unsafe.allocateMemory(ALLOC_SIZE * ADDRESS_SIZE + HEADER_SIZE);
 		unsafe.putInt(address, ALLOC_SIZE);
-		unsafe.putInt(address + 4, 0);
-		unsafe.setMemory(address + 8, ALLOC_MEM_SIZE, ZERO_BYTE);
+		unsafe.putInt(address + SIZE_OFFSET, 0);
+		unsafe.putLong(address + REFID_OFFSET, refId);
+		unsafe.putByte(address + DIM_OFFSET, dim);
+		unsafe.setMemory(address + HEADER_SIZE, ALLOC_MEM_SIZE, ZERO_BYTE);
 		return address;
 	}
 	
@@ -241,6 +283,14 @@ public class AllocationPointerOperations {
 		unsafe.putAddress(address + HEADER_SIZE + (index * ADDRESS_SIZE), 0L);
 	}
 	
+	
+	/**
+	 * Frees the memory block at the passed address
+	 * @param address the address of the memory block to free
+	 */
+	public static final void freeAddress(long address) {
+		unsafe.freeMemory(address);
+	}
 	
 	/**
 	 * Prints the summary state of this AllocationPointerOperations

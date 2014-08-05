@@ -105,7 +105,7 @@ public interface MemoryMBean {
 	 * Returns the total number of existing allocations, not including the base line defined in {@link UnsafeAdapterOld#BASELINE_ALLOCS}
 	 * @return the total number of existing allocations
 	 */
-	public int getTotalAllocationCount();
+	public long getTotalAllocationCount();
 	    	
 	/**
 	 * Returns the number of retained phantom references to memory allocations

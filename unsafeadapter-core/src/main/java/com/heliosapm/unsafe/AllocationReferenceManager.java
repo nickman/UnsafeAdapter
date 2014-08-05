@@ -56,15 +56,6 @@ public class AllocationReferenceManager implements Runnable {
     /** Serial number factory for memory allocation references */
 	protected final AtomicLong refSerial = new AtomicLong(0L);
 
-	// =========================================================
-	//  Individual Allocation Tracking
-	// =========================================================	
-	/** A map of memory allocation sizes keyed by the memory block address */
-//	final SpinLockedTLongLongHashMap memoryAllocations;
-	final NonBlockingHashMapLong<Long> memoryAllocations;
-	/** A map of memory allocation alignment overhead sizes keyed by the memory block address */
-//	final SpinLockedTLongLongHashMap alignmentOverheads;
-	final NonBlockingHashMapLong<Long> alignmentOverheads;
 	
 	// =========================================================
 	//  Aggregate Allocation Tracking
@@ -98,23 +89,14 @@ public class AllocationReferenceManager implements Runnable {
 		this.memTracking = memTracking;
 		this.memAlignment = memAlignment;
 		if(this.memTracking) {
-			memoryAllocations = new NonBlockingHashMapLong<Long>(1024, true);
-//			memoryAllocations = new SpinLockedTLongLongHashMap(2048, .1f);
 			totalMemoryAllocated = new AtomicLong();
 			totalAllocationCount = new AtomicLong();
 			totalAlignmentOverhead = new AtomicLong();			
 		} else {
-			memoryAllocations = null;
 			totalMemoryAllocated = null;
 			totalAllocationCount = null;
 			totalAlignmentOverhead = null;			
 		}		
-		if(this.memAlignment) {
-			alignmentOverheads = new NonBlockingHashMapLong<Long>(1024, true);
-//			alignmentOverheads = new SpinLockedTLongLongHashMap(2048, .1f);			
-		} else {
-			alignmentOverheads = null;
-		}
 		// =========================================================
 		// Start the cleaner thread
 		// =========================================================
@@ -122,10 +104,32 @@ public class AllocationReferenceManager implements Runnable {
 		cleanerThread.setDaemon(true);
 		cleanerThread.setPriority(Thread.MAX_PRIORITY);
 		cleanerThread.start();		
-		
 	}
+	
+	// =====================================================================================================
+	// AllocationPointer Requests
+	// =====================================================================================================
+	
+	
+	/**
+	 * Returns a new {@link AllocationPointer} that is ref queue registered 
+	 * and configured according to mem tracking and mem alignment settings. 
+	 * @return a new AllocationPointer
+	 */
+	public final AllocationPointer newAllocationPointer() {
+		final long refId = refSerial.incrementAndGet();
+		final AllocationPointer ap = new AllocationPointer(memTracking, memAlignment, refId);
+		Reference<Object> ref = ap.getReference(refQueue);
+		trackedRefs.put(refId, ref);
+		return ap;
+	}
+	
 
 
+	/**
+	 * {@inheritDoc}
+	 * @see java.lang.Runnable#run()
+	 */
 	@Override
 	public void run() {
 		log("Starting Unsafe Cleaner Thread [%s]", Thread.currentThread().getName());
@@ -176,35 +180,40 @@ public class AllocationReferenceManager implements Runnable {
 	private final void decrementMemTracking(final long...clearedAddresses) {
 		if(clearedAddresses!=null && clearedAddresses.length>0) {
 			for(final long clearedAddress: clearedAddresses) {				
-				if(!memoryAllocations.contains(clearedAddress)) continue;
-				final long allocSize = memoryAllocations.remove(clearedAddress);
-				if(allocSize>0) {
-					totalMemoryAllocated.addAndGet(allocSize * -1L);
-					totalAllocationCount.decrementAndGet();
-					if(memAlignment) {
-						final long alignOverhead = alignmentOverheads.remove(clearedAddress);
-						if(alignOverhead>0) {
-							totalAlignmentOverhead.addAndGet(alignOverhead * -1L);
-						}
-					}
-				}
+//				if(!memoryAllocations.contains(clearedAddress)) continue;
+//				final long allocSize = memoryAllocations.remove(clearedAddress);
+//				if(allocSize>0) {
+//					totalMemoryAllocated.addAndGet(allocSize * -1L);
+//					totalAllocationCount.decrementAndGet();
+//					if(memAlignment) {
+//						final long alignOverhead = alignmentOverheads.remove(clearedAddress);
+//						if(alignOverhead>0) {
+//							totalAlignmentOverhead.addAndGet(alignOverhead * -1L);
+//						}
+//					}
+//				}
 			}
 		}
 	}
 	
 	
-	public final void allocateMemory(long size, long alignmentOverhead, Object memoryManager) {
+	final void allocateMemory(long size, long alignmentOverhead, Object memoryManager) {
 		
 	}
 
-	public final void reallocateMemory(long priorAddress, long newAddress, long size, long alignmentOverhead, Object memoryManager) {
+	final void reallocateMemory(long priorAddress, long newAddress, long size, long alignmentOverhead, Object memoryManager) {
+		
+	}
+	
+	
+	final void freeMemory(long address, Object memoryManager) {
 		
 	}
 	
 	
 	/**
-	 * Returns 
-	 * @return the memTracking
+	 * Indicates if mem tracking is enabled
+	 * @return true if mem tracking is enabled, false otherwise
 	 */
 	public final boolean isMemTracking() {
 		return memTracking;
@@ -212,8 +221,8 @@ public class AllocationReferenceManager implements Runnable {
 
 
 	/**
-	 * Returns 
-	 * @return the memAlignment
+	 * Indicates if cache-line mem alignment is enabled
+	 * @return true if cache-line mem alignment, false otherwise
 	 */
 	public final boolean isMemAlignment() {
 		return memAlignment;
@@ -224,71 +233,36 @@ public class AllocationReferenceManager implements Runnable {
 	 * Returns the number of pending allocation references
 	 * @return the number of pending allocation references
 	 */
-	public final long getPendingRefs() {
+	public int getPendingRefs() {
 		return trackedRefs.size();
 	}
 
 
+
 	/**
-	 * Returns 
-	 * @return the ifaceTracker
+	 * Returns the total tracked allocated memory allocated in bytes 
+	 * @return the the total tracked allocated memory 
 	 */
-	public final InterfaceTracker getIfaceTracker() {
-		return ifaceTracker;
+	public final long getTotalMemoryAllocated() {
+		return memTracking ? totalMemoryAllocated.get() : -1L;
 	}
 
 
 	/**
-	 * Returns 
-	 * @return the refSerial
+	 * Returns the total number of memory allocations
+	 * @return the total number of memory allocations
 	 */
-	public final AtomicLong getRefSerial() {
-		return refSerial;
+	public final long getTotalAllocationCount() {
+		return memTracking ? totalAllocationCount.get() : -1L;
 	}
 
 
 	/**
-	 * Returns 
-	 * @return the memoryAllocations
+	 * Returns the total cache-line memory alignment overhead
+	 * @return the total cache-line memory alignment overhead
 	 */
-	public final NonBlockingHashMapLong<Long> getMemoryAllocations() {
-		return memoryAllocations;
-	}
-
-
-	/**
-	 * Returns 
-	 * @return the alignmentOverheads
-	 */
-	public final NonBlockingHashMapLong<Long> getAlignmentOverheads() {
-		return alignmentOverheads;
-	}
-
-
-	/**
-	 * Returns 
-	 * @return the totalMemoryAllocated
-	 */
-	public final AtomicLong getTotalMemoryAllocated() {
-		return totalMemoryAllocated;
-	}
-
-
-	/**
-	 * Returns 
-	 * @return the totalAllocationCount
-	 */
-	public final AtomicLong getTotalAllocationCount() {
-		return totalAllocationCount;
-	}
-
-
-	/**
-	 * Returns 
-	 * @return the totalAlignmentOverhead
-	 */
-	public final AtomicLong getTotalAlignmentOverhead() {
-		return totalAlignmentOverhead;
+	public final long getTotalAlignmentOverhead() {
+		return memAlignment ? totalAlignmentOverhead.get() : -1L;		
 	}
 
 

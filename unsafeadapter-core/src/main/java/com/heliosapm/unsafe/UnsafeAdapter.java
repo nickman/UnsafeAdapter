@@ -24,15 +24,15 @@
  */
 package com.heliosapm.unsafe;
 
+import java.lang.ref.Reference;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.security.ProtectionDomain;
+import java.util.concurrent.atomic.AtomicLong;
 
 import javax.management.ObjectName;
 
 import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
-
-
 
 import sun.misc.Unsafe;
 
@@ -181,6 +181,25 @@ public class UnsafeAdapter {
 			ReflectionHelper.setFieldReadOnly(UnsafeAdapter.class, "adapter");
 		}
 	}
+	
+//	// =====================================================================================================
+//	// AllocationPointer Requests
+//	// =====================================================================================================
+//	
+//    /** Serial number factory for memory allocation references */
+//	protected static final AtomicLong refSerial = new AtomicLong(0L);
+//	
+//	
+//	/**
+//	 * Returns a new {@link AllocationPointer} that is ref queue registered 
+//	 * and configured according to mem tracking and mem alignment settings. 
+//	 * @return a new AllocationPointer
+//	 */
+//	public static final AllocationPointer newAllocationPointer() {
+//		final AllocationPointer ap = new AllocationPointer(adapter.trackMem, adapter.alignMem, refSerial.incrementAndGet());
+//		Reference<Object> ref = ap.getReference(adapter.refQueue);
+//		return ap;
+//	}
 	
 	// =====================================================================================================
 	// Configuration reads

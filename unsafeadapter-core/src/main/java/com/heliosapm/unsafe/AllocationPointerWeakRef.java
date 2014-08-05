@@ -2,7 +2,7 @@
  * Helios, OpenSource Monitoring
  * Brought to you by the Helios Development Group
  *
- * Copyright 2007, Helios Development Group and individual contributors
+ * Copyright 2014, Helios Development Group and individual contributors
  * as indicated by the @author tags. See the copyright.txt file in the
  * distribution for a full listing of individual contributors.
  *
@@ -24,22 +24,28 @@
  */
 package com.heliosapm.unsafe;
 
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.WeakReference;
+
 /**
- * <p>Title: AddressAssignable</p>
- * <p>Description: A compliment to {@link Deallocatable} where instances will be updated with the address of the memory allocation request
- * when issuing an memory allocation request against {@link UnsafeAdapter}.</p> 
+ * <p>Title: AllocationPointerWeakRef</p>
+ * <p>Description: </p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
- * <p><code>com.heliosapm.unsafe.AddressAssignable</code></p>
+ * <p><code>com.heliosapm.unsafe.AllocationPointerWeakRef</code></p>
  */
 
-public interface AddressAssignable {
-	
+public class AllocationPointerWeakRef extends WeakReference {
+
+
 	/**
-	 * Called by the {@link UnsafeAdapter} to assign the allocated address on an allocation call
-	 * @param address The address of the allocated memory block 
-	 * @param size The size of the allocation being registered in bytes
-	 * @param alignmentOverhead  The alignment overhead being registered in bytes
-	 */	
-	public void setAllocated(long address, long size, long alignmentOverhead);
+	 * Creates a new AllocationPointerWeakRef
+	 * @param referent
+	 * @param q
+	 */
+	public AllocationPointerWeakRef(Object referent, ReferenceQueue q) {
+		super(referent, q);
+		// TODO Auto-generated constructor stub
+	}
+
 }
