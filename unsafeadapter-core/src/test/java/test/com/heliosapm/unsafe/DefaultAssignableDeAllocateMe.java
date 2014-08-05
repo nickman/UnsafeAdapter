@@ -48,7 +48,9 @@ public class DefaultAssignableDeAllocateMe implements Deallocatable, AddressAssi
 	 * @param addressCount The number of address slots to create
 	 */
 	public DefaultAssignableDeAllocateMe(int addressCount) {
-		addresses = new long[1][addressCount];
+		addresses = new long[2][];
+		addresses[0] = new long[addressCount];
+		addresses[1] = new long[] {0};
 	}
 
 	/**
@@ -79,26 +81,25 @@ public class DefaultAssignableDeAllocateMe implements Deallocatable, AddressAssi
 		if(index > addresses[0].length) throw new RuntimeException("Invalid state. Address slots [" + index +  "] are full");
 		return index;
 	}
-	
-	/** Indicates if this deallocatable has been refed */
-	private boolean refed = false;
-	
+
 	/**
 	 * {@inheritDoc}
-	 * @see com.heliosapm.unsafe.Deallocatable#isReferenced()
+	 * @see com.heliosapm.unsafe.Deallocatable#getReferenceId()
 	 */
 	@Override
-	public boolean isReferenced() {
-		return refed;
+	public long getReferenceId() {
+		return addresses[1][0];
 	}
 
 	/**
 	 * {@inheritDoc}
-	 * @see com.heliosapm.unsafe.Deallocatable#setReferenced()
+	 * @see com.heliosapm.unsafe.Deallocatable#setReferenceId(long)
 	 */
 	@Override
-	public void setReferenced() {
-		refed = true;
+	public void setReferenceId(long referenceId) {
+		addresses[1][0] = referenceId;
+		
 	}
+	
 
 }

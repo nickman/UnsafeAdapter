@@ -36,7 +36,7 @@ import java.lang.ref.ReferenceQueue;
  * <p><code>com.heliosapm.unsafe.AllocationPointer</code></p>
  */
 
-public class AllocationPointer implements ReferenceProvider<Object>, Deallocatable, AddressAssignable {
+public class AllocationPointer implements ReferenceProvider<Object>, AddressAssignable {
 	/** The address of the memory block allocated for this AllocationPointer */
 	private final long[][] _address;
 	/** The phantom reference to this allocation pointer if one has been requested */
@@ -155,7 +155,9 @@ public class AllocationPointer implements ReferenceProvider<Object>, Deallocatab
 	 * Frees all memory allocated within this AllocationPointer
 	 */
 	public final void free() {
-		AllocationPointerOperations.free(_address[0][0]);
+		if(_address[0][0]>0) {
+			AllocationPointerOperations.free(_address[0][0]);
+		}
 	}
 	
 	
@@ -181,24 +183,6 @@ public class AllocationPointer implements ReferenceProvider<Object>, Deallocatab
 	}
 
 
-	/**
-	 * {@inheritDoc}
-	 * @see com.heliosapm.unsafe.Deallocatable#isReferenced()
-	 */
-	@Override
-	public boolean isReferenced() {
-		return phantomRef != null;
-	}
-
-
-	/**
-	 * {@inheritDoc}
-	 * @see com.heliosapm.unsafe.Deallocatable#setReferenced()
-	 */
-	@Override
-	public void setReferenced() {
-		/* No Op */		
-	}
 
 
 

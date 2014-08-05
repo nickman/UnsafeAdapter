@@ -370,19 +370,32 @@ public class BaseTest {
 	
 	/** A serial number factory for stream threads */
 	public static final AtomicLong streamThreadSerial = new AtomicLong();
+
 	
+	/**
+	 * Validates that mem tracking reports correct values after memory is allocated  when tracking is turned on, 
+	 * or that disabled mem tracking is reporting the disabled values. Assumes one allocation
+	 * @param trackedValue The expected value when mem tracking is enabled
+	 * @param untrackedValue The expected value when mem tracking is disabled
+	 * 
+	 */
+	public void validateAllocated(long trackedValue, long untrackedValue) {
+		validateAllocated(trackedValue, untrackedValue, 1);
+	}
+
 	
 	/**
 	 * Validates that mem tracking reports correct values after memory is allocated  when tracking is turned on, 
 	 * or that disabled mem tracking is reporting the disabled values.
 	 * @param trackedValue The expected value when mem tracking is enabled
 	 * @param untrackedValue The expected value when mem tracking is disabled
+	 * @param allocationCount The number of expected allocations
 	 * 
 	 */
-	public void validateAllocated(long trackedValue, long untrackedValue) {
+	public void validateAllocated(long trackedValue, long untrackedValue, long allocationCount) {
 		if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
 			Assert.assertEquals("Mem Total Alloc was unexpected. --> ", trackedValue, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
-			Assert.assertEquals("Mem Total Allocation Count was unexpected. --> ", 1, UnsafeAdapter.getMemoryMBean().getTotalAllocationCount());
+			Assert.assertEquals("Mem Total Allocation Count was unexpected. --> ", allocationCount, UnsafeAdapter.getMemoryMBean().getTotalAllocationCount());
 		} else {
 			Assert.assertEquals("Mem Total Alloc was unexpected. --> ", untrackedValue, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
 			Assert.assertEquals("Mem Total Allocation Count was unexpected. --> ", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocationCount());

@@ -10,15 +10,18 @@ package com.heliosapm.unsafe;
 
 public class MemSpinLock implements SpinLock, Deallocatable {
 	/** The lock address */
-	protected final long[][] address;
+	protected final long[][] address = new long[2][1];
+	
+	//   FIXME  !!
 
 	/**
 	 * Creates a new MemSpinLock
 	 * @param address The address of the lock
 	 */
 	MemSpinLock(long address) {
-		this.address = new long[1][1];		
-		this.address[0][0] = NO_LOCK;
+		
+		this.address[0][0] = address;
+		UnsafeAdapter.putLong(this.address[0][0], NO_LOCK);
 	}
 
 	/**
@@ -81,36 +84,25 @@ public class MemSpinLock implements SpinLock, Deallocatable {
 	public boolean isLockedByMe() {
 		return UnsafeAdapter.xislockedbyt(address[0][0]);
 	}
-	
-	/** Indicates if this deallocatable has been refed */
-	private boolean refed = false;
-	
+
 	/**
 	 * {@inheritDoc}
-	 * @see com.heliosapm.unsafe.Deallocatable#isReferenced()
+	 * @see com.heliosapm.unsafe.Deallocatable#getReferenceId()
 	 */
 	@Override
-	public boolean isReferenced() {
-		try {
-			xlock();
-			return refed;
-		} finally {
-			xunlock();
-		}
+	public long getReferenceId() {
+		return address[1][0];
 	}
 
 	/**
 	 * {@inheritDoc}
-	 * @see com.heliosapm.unsafe.Deallocatable#setReferenced()
+	 * @see com.heliosapm.unsafe.Deallocatable#setReferenceId(long)
 	 */
 	@Override
-	public void setReferenced() {
-		try {
-			xlock();
-			refed = true;
-		} finally {
-			xunlock();
-		}			
-	}	
+	public void setReferenceId(long referenceId) {
+		address[1][0] = referenceId;
+		
+	}
+	
 
 }

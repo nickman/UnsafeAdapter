@@ -133,12 +133,12 @@ public class SafeAdapterImpl extends DefaultUnsafeAdapterImpl implements SafeAda
 		long address = UnsafeAdapter.getAddressOf(buff);
 		if(trackMem) {		
 			if(trackMem) {		
-				memoryAllocations.put(address, size);
+				memoryAllocations.put(address, (Long)size);
 				totalMemoryAllocated.addAndGet(size);
 				totalAllocationCount.incrementAndGet();
 				if(alignmentOverhead>0) {
 					totalAlignmentOverhead.addAndGet(alignmentOverhead);
-					alignmentOverheads.put(address, alignmentOverhead); 
+					alignmentOverheads.put(address, (Long)alignmentOverhead); 
 				}
 			}
 		}

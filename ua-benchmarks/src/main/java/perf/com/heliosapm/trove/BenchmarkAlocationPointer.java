@@ -22,23 +22,48 @@
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org. 
  *
  */
-package gnu.trove.impl.hash;
+package perf.com.heliosapm.trove;
+
+import java.util.Random;
+
+import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.State;
+
+import com.heliosapm.unsafe.AllocationPointer;
+import com.heliosapm.unsafe.UnsafeAdapter;
 
 /**
- * <p>Title: UnsafeTLongLongValueHashIterator</p>
+ * <p>Title: BenchmarkAlocationPointer</p>
  * <p>Description: </p> 
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
- * <p><code>gnu.trove.impl.hash.UnsafeTLongLongValueHashIterator</code></p>
+ * <p><code>perf.com.heliosapm.trove.BenchmarkAlocationPointer</code></p>
  */
+@State(Scope.Thread)
+public class BenchmarkAlocationPointer {
+	
+	
 
-public class UnsafeTLongLongValueHashIterator {
-
-	/**
-	 * Creates a new UnsafeTLongLongValueHashIterator
-	 */
-	public UnsafeTLongLongValueHashIterator() {
-		// TODO Auto-generated constructor stub
+	@Benchmark
+	public int testFixedSizeAllocationPointer() {	
+		final Random r = new Random(System.currentTimeMillis());
+		int success = 0;
+		AllocationPointer ap = new AllocationPointer();
+		final int valueCount = 1000;;
+		final long[] writeValues = new long[valueCount];
+		for(short i = 0; i < writeValues.length; i++) {
+			writeValues[i] = r.nextLong();
+			final long address = UnsafeAdapter.allocateMemory(8, ap);
+			UnsafeAdapter.putLong(address, writeValues[i]);
+		}
+		for(short i = 0; i < writeValues.length; i++) {
+			final long readValue = UnsafeAdapter.getLong(ap.getAddress(i));
+			if(readValue==writeValues[i]) success++;
+		}
+		final long expectedAllocation = ((long)valueCount << 3);
+		ap = null;		
+		return success;
 	}
-
+	
 }

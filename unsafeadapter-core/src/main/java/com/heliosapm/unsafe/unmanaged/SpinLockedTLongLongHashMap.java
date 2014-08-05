@@ -18,13 +18,22 @@ public class SpinLockedTLongLongHashMap extends TLongLongHashMap {
 	protected final MemSpinLock lock = new MemSpinLock();
 	
 	/** Represents a null key or value */
-	public static final long NULL = 0L;
+	public static final long NULL = -1L;
 	
 	/**
 	 * Creates a new SpinLockedTLongLongHashMap
 	 */
 	public SpinLockedTLongLongHashMap() {
 		super(1024, 0.1f, NULL, NULL);
+	}
+	
+	/**
+	 * Creates a new SpinLockedTLongLongHashMap
+	 * @param initialCapacity The initial capacity of the map
+	 * @param loadFactor The load factor of the map
+	 */
+	public SpinLockedTLongLongHashMap(int initialCapacity, float loadFactor) {
+		super(initialCapacity, loadFactor, NULL, NULL);
 	}
 	
 	/**

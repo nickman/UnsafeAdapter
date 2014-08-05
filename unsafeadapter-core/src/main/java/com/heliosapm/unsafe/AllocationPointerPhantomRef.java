@@ -38,6 +38,11 @@ class AllocationPointerPhantomRef extends PhantomReference<Object> {
 	/** The address that the referenced AllocationPointer pointed to */
 	private final long[][] address;
 	
+	/** A copy of the original addresses once the allocations have been cleared.
+	 *   Copied for allocation tracking
+	 */
+	private long[] clearedAddresses = null;
+	
 	/**
 	 * Creates a new AllocationPointerPhantomRef
 	 * @param referent The AllocationPointer to be referenced
@@ -50,21 +55,27 @@ class AllocationPointerPhantomRef extends PhantomReference<Object> {
 	}
 	
 	/**
+	 * Returns the cleared addresses
+	 * @return the cleared addresses
+	 */
+	public long[] getClearedAddresses() {
+		return clearedAddresses;
+	}
+	
+	/**
 	 * {@inheritDoc}
 	 * @see java.lang.ref.Reference#clear()
 	 */
 	public void clear() {
 		if(address!=null && address.length!=0) {
 			if(address[0][0] > 0) {
-				AllocationPointerOperations.free(address[0][0]);
+				clearedAddresses = AllocationPointerOperations.free(address[0][0], true);
 				address[0][0] = 0;
+			} else {
+				clearedAddresses = AllocationPointerOperations.EMPTY_LONG_ARR;
 			}
-			if(address[0].length==2) {
-				if(address[1][0] > 0) {
-					AllocationPointerOperations.free(address[1][0]);
-					address[1][0] = 0;
-				}				
-			}
+		} else {
+			clearedAddresses = AllocationPointerOperations.EMPTY_LONG_ARR;
 		}
 		super.clear();
 	}

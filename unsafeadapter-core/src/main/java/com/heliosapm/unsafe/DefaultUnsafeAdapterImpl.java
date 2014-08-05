@@ -40,7 +40,6 @@ import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
 import sun.misc.Unsafe;
 
 import com.heliosapm.unsafe.ReflectionHelper.ReferenceQueueLengthReader;
-import com.heliosapm.unsafe.unmanaged.SpinLockedTLongLongHashMap;
 
 
 
@@ -102,7 +101,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	//  Memory Tracking
 	// =========================================================
 	/** A map of phantom refs */
-	final NonBlockingHashMapLong<DeallocationPhantomReference> phantomRefs = new NonBlockingHashMapLong<DeallocationPhantomReference>(1024, true); 
+	final NonBlockingHashMapLong<Reference<Object>> phantomRefs = new NonBlockingHashMapLong<Reference<Object>>(1024, true); 
 	/** The interface tracker to cache which classes implement "special" UnsafeAdapter interfaces */
 	final InterfaceTracker ifaceTracker = new InterfaceTracker();
     /** Serial number factory for memory allocationreferences */
@@ -110,9 +109,11 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	
 	
 	/** A map of memory allocation sizes keyed by the memory block address */
-	final SpinLockedTLongLongHashMap memoryAllocations;
+//	final SpinLockedTLongLongHashMap memoryAllocations;
+	final NonBlockingHashMapLong<Long> memoryAllocations;
 	/** A map of memory allocation alignment overhead sizes keyed by the memory block address */
-	final SpinLockedTLongLongHashMap alignmentOverheads;
+//	final SpinLockedTLongLongHashMap alignmentOverheads;
+	final NonBlockingHashMapLong<Long> alignmentOverheads;
 	
 	/** The total native memory allocation */
 	final AtomicLong totalMemoryAllocated;
@@ -122,8 +123,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	final AtomicLong totalAlignmentOverhead;
 	// =========================================================
 	//  Auto Deallocation
-	// =========================================================	
-		
+	// =========================================================			
     /** A map of memory allocation references keyed by an internal counter */
     final NonBlockingHashMapLong<AllocationPointer> deAllocs = new NonBlockingHashMapLong<AllocationPointer>(1024, false);
 	/** The reference queue where collected allocations go */
@@ -176,8 +176,11 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
     		totalMemoryAllocated = new AtomicLong(0L);
     		totalAlignmentOverhead = new AtomicLong(0L);
         	if(this.getClass()==DefaultUnsafeAdapterImpl.class) {
-        		memoryAllocations = new SpinLockedTLongLongHashMap();
-        		alignmentOverheads = new SpinLockedTLongLongHashMap();
+//        		memoryAllocations = new SpinLockedTLongLongHashMap(2048, .1f);
+//        		alignmentOverheads = new SpinLockedTLongLongHashMap(2048, .1f);
+        		memoryAllocations = new NonBlockingHashMapLong<Long>(1024, true);
+        		alignmentOverheads = new NonBlockingHashMapLong<Long>(1024, true);
+        		
         	} else {
         		log("Unsafe issue  --->  [%s] != [%s]", this.getClass().getName(), DefaultUnsafeAdapterImpl.class.getName());
         		memoryAllocations = null;
@@ -233,7 +236,7 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	 * @author Whitehead (nwhitehead AT heliosdev DOT org)
 	 * <p><code>com.heliosapm.unsafe.DefaultUnsafeAdapterImpl.DeallocationPhantomReference</code></p>
 	 */
-	class DeallocationPhantomReference extends PhantomReference<Deallocatable> implements Deallocatable {
+	class DeallocationPhantomReference extends PhantomReference<Object> implements Deallocatable {
 		/** The keyAddresses to deallocate when this reference is enqueued */
 		final long[][] addresses;
 		/** The unique serial number for this reference */
@@ -245,8 +248,8 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 		 * @param refQueue The reference queue
 		 */
 		@SuppressWarnings("unchecked") 
-		DeallocationPhantomReference(Deallocatable referent, ReferenceQueue<?> refQueue) {
-			super(referent, (ReferenceQueue<? super Deallocatable>) refQueue);
+		DeallocationPhantomReference(Deallocatable referent, ReferenceQueue<Object> refQueue) {
+			super(referent, refQueue);
 			this.addresses = referent.getAddresses();
 			id = phantomSerial.incrementAndGet();
 		}
@@ -273,26 +276,19 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 		 * @see com.heliosapm.unsafe.Deallocatable#getAddresses()
 		 */
 		@Override
-		public long[][] getAddresses() {
+		public final long[][] getAddresses() {
 			return addresses;
 		}
 
-		/**
-		 * {@inheritDoc}
-		 * @see com.heliosapm.unsafe.Deallocatable#isReferenced()
-		 */
 		@Override
-		public boolean isReferenced() {
-			return true;
+		public final long getReferenceId() {
+			return id;
 		}
 
-		/**
-		 * {@inheritDoc}
-		 * @see com.heliosapm.unsafe.Deallocatable#setReferenced()
-		 */
+
 		@Override
-		public void setReferenced() {
-			/* No Op */
+		public final void setReferenceId(long referenceId) {
+			/* No Op */			
 		}
 	}
 
@@ -305,7 +301,27 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 		try {
 			JMXHelper.registerMBean(this, UnsafeAdapter.UNSAFE_MEM_OBJECT_NAME);
 		} catch (Exception ex) {
-			loge("Failed to register JMX MemoryMBean", ex);
+//			loge("Failed to register JMX MemoryMBean", ex);
+			throw new RuntimeException("Failed to register JMX MemoryMBean", ex);
+		}
+	}
+	
+	private final void decrementMemTracking(final long...clearedAddresses) {
+		if(clearedAddresses!=null && clearedAddresses.length>0) {
+			for(final long clearedAddress: clearedAddresses) {				
+				if(!memoryAllocations.contains(clearedAddress)) continue;
+				final long allocSize = memoryAllocations.remove(clearedAddress);
+				if(allocSize>0) {
+					totalMemoryAllocated.addAndGet(allocSize * -1L);
+					totalAllocationCount.decrementAndGet();
+					if(alignMem) {
+						final long alignOverhead = alignmentOverheads.remove(clearedAddress);
+						if(alignOverhead>0) {
+							totalAlignmentOverhead.addAndGet(alignOverhead * -1L);
+						}
+					}
+				}
+			}
 		}
 	}
 	
@@ -320,11 +336,30 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 		boolean terminating = false;
 		while(true) {
 			try {
-				Reference<?> ref = refQueue.remove();
-				log("Dequeued Reference [%s]", ref);
+				Reference<?> ref = refQueue.remove(3000);
+				if(ref==null) {
+					System.gc();
+					continue;
+				}
+//				log("Dequeued Reference [%s]", ref);
 				if(ref!=null) { 
 					ref.clear();
 				}
+				if(ref instanceof AllocationPointerPhantomRef) {
+					
+				}
+				if(trackMem && ref instanceof AllocationPointerPhantomRef) {
+					decrementMemTracking(((AllocationPointerPhantomRef)ref).getClearedAddresses());					
+				} else {
+					if(trackMem && InterfaceTracker.isDeallocatable(ifaceTracker.getMask(ref))) {
+						final long[][] addrs = ((Deallocatable)ref).getAddresses();
+						if(addrs!=null && addrs.length>0) {
+							for(long[] clearedAddresses: addrs) {
+								decrementMemTracking(clearedAddresses);
+							}
+						}
+					}
+				}				
 				if(terminating) {
 					if(getRefQueuePending()<1 && getPendingRefs()<1 ) break;
 				}
@@ -388,8 +423,8 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 	 * @return The address of the allocated memory
 	 * @see sun.misc.Unsafe#allocateMemory(long)
 	 */
-	public long allocateMemory(long size, Deallocatable dealloc) {
-		return _allocateMemory(size, 0L, dealloc);
+	public long allocateMemory(long size, Object memoryManager) {
+		return _allocateMemory(size, 0L, memoryManager);
 	}	
 	
 	
@@ -473,14 +508,15 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 			if(InterfaceTracker.isAllocationPointer(handlerMask)) {
 				AllocationPointer ap = (AllocationPointer)memoryManager;
 				ap.setAllocated(address);
-				ap.getReference(refQueue);
+				Reference<Object> ref = ap.getReference(refQueue);
+				phantomRefs.put(address, ref);
 			} else {
 				if(InterfaceTracker.isReferenceProvider(handlerMask)) {
 					((ReferenceProvider)memoryManager).getReference(refQueue);
 				}
 				if(InterfaceTracker.isDeallocatable(handlerMask)) {
 					Deallocatable d = (Deallocatable)memoryManager;
-					if(!d.isReferenced()) {
+					if(d.getReferenceId()==0) {
 						newDeallocationPhantomReference(d);
 					}
 				}
@@ -490,12 +526,13 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 			}
 		}
 		if(trackMem) {		
-			memoryAllocations.put(address, size);
+			
+			memoryAllocations.put(address, (Long)size);
 			totalMemoryAllocated.addAndGet(size);
 			totalAllocationCount.incrementAndGet();
 			if(alignmentOverhead>0) {
 				totalAlignmentOverhead.addAndGet(alignmentOverhead);
-				alignmentOverheads.put(address, alignmentOverhead); 
+				alignmentOverheads.put(address, (Long)alignmentOverhead); 
 			}
 		}
 		return address;
@@ -564,11 +601,11 @@ public class DefaultUnsafeAdapterImpl implements Runnable, DefaultUnsafeAdapterI
 			// ==========================================================
 			//  Add new allocation
 			// ==========================================================		
-			memoryAllocations.put(newAddress, size);
+			memoryAllocations.put(newAddress, (Long)size);
 			totalMemoryAllocated.addAndGet(size);			
 			if(alignmentOverhead>0) {
 				totalAlignmentOverhead.addAndGet(alignmentOverhead);
-				alignmentOverheads.put(newAddress, alignmentOverhead); 
+				alignmentOverheads.put(newAddress, (Long)alignmentOverhead); 
 			}
 		}
 		return newAddress;

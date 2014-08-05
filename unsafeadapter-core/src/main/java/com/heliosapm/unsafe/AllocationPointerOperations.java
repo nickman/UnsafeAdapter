@@ -270,21 +270,49 @@ public class AllocationPointerOperations {
 		return b.append("]").toString();
 	}
 	
+	/** Empty long arr const */
+	public static final long[] EMPTY_LONG_ARR = {};
+	
 	/**
-	 * Frees all memory allocated within the referenced AllocationPointerOperations
+	 * Frees all memory allocated within the referenced AllocationPointerOperations.
+	 * No includePostMortem is returned.
 	 * @param address the memory address of the AllocationPointerOperations
 	 */
 	public static final void free(final long address) {
+		free(address, false);
+	}
+
+	
+	/**
+	 * Frees all memory allocated within the referenced AllocationPointerOperations
+	 * @param address the memory address of the AllocationPointerOperations
+	 * @param includePostMortem If true, the returned array will have all the formerly allocated addresses,
+	 * otherwise will be zero length.
+	 * @return The [possibly empty] array of addresses just deallocated
+	 */
+	public static final long[] free(final long address, final boolean includePostMortem) {
 		final int size = getSize(address);
+		long[] deadAddresses = includePostMortem ? size>0 ? new long[size] : EMPTY_LONG_ARR : EMPTY_LONG_ARR;
 		if(size>0) {
-			for(int i = 0; i < size; i++) {
-				long addr = getAddress(address, i);
-				if(addr>0) {
-					unsafe.freeMemory(addr);
+			if(includePostMortem) {
+				for(int i = 0; i < size; i++) {
+					long addr = getAddress(address, i);
+					deadAddresses[i] = addr;
+					if(addr>0) {
+						unsafe.freeMemory(addr);
+					}
+				}				
+			} else {
+				for(int i = 0; i < size; i++) {
+					long addr = getAddress(address, i);
+					if(addr>0) {
+						unsafe.freeMemory(addr);
+					}
 				}
 			}
 		}
 		unsafe.freeMemory(address);
+		return deadAddresses;
 	}
 	
 	

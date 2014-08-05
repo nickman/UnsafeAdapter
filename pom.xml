@@ -12,6 +12,7 @@
 	
 	<modules>
 		<module>unsafeadapter-core</module>
+		<module>unsafeadapter-trove</module>
 		<module>ua-benchmarks</module>
 		
   </modules>

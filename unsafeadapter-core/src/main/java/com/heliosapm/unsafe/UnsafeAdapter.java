@@ -759,8 +759,8 @@ public class UnsafeAdapter {
 	 * @return The address of the allocated memory
 	 * @see sun.misc.Unsafe#allocateMemory(long)
 	 */
-	public static long allocateMemory(long size, Deallocatable dealloc) {
-		return adapter.allocateMemory(size, dealloc);
+	public static long allocateMemory(long size, Object memoryManager) {
+		return adapter.allocateMemory(size, memoryManager);
 	}	
 	
 	

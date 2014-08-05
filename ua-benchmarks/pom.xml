@@ -57,6 +57,11 @@ questions.
             <artifactId>unsafeadapter-core</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.heliosapm</groupId>
+            <artifactId>unsafeadapter-trove</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         
     </dependencies>
 

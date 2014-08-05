@@ -25,8 +25,10 @@
 package test.com.heliosapm.unsafe;
 
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 
+import com.heliosapm.unsafe.AllocationPointer;
 import com.heliosapm.unsafe.UnsafeAdapter;
 
 /**
@@ -39,6 +41,33 @@ import com.heliosapm.unsafe.UnsafeAdapter;
 @UnsafeAdapterConfiguration(memTracking=true)
 @SuppressWarnings("restriction")
 public class AutoDeallocationTest extends BaseTest {
+	
+	@Test
+//	@Ignore
+	public void testAllocationPointer() throws Exception {
+		AllocationPointer ap = new AllocationPointer();
+		try {
+			final int valueCount = Math.abs(RANDOM.nextInt(100)) + 100;
+			final long[] writeValues = new long[valueCount];
+			for(short i = 0; i < writeValues.length; i++) {
+				writeValues[i] = nextPosLong();
+				final long address = UnsafeAdapter.allocateMemory(8, ap);
+				UnsafeAdapter.putLong(address, writeValues[i]);
+			}
+			for(short i = 0; i < writeValues.length; i++) {
+				final long readValue = UnsafeAdapter.getLong(ap.getAddress(i));
+				Assert.assertEquals("Incorrect value at index [" + i + "] ", writeValues[i], readValue);
+			}
+			final long expectedAllocation = ((long)valueCount << 3);
+			validateAllocated(expectedAllocation, -1, valueCount);
+			ap = null;
+			System.gc();
+			sleep(500);
+			validateDeallocated(0, -1L);
+		} finally {
+			if(ap!=null) ap.free();
+		}
+	}
 	
 	/**
 	 * Tests an auto de-allocated long memory allocation 

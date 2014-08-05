@@ -19,7 +19,8 @@ import java.nio.channels.FileChannel;
 		/** The lock file name */
 		protected final File diskFile;
 		/** The mapped lock file address */
-		protected final long[][] address = new long[1][1];
+		protected final long[][] address = new long[2][1];
+		
 		/**
 		 * Creates a new MemSpinLock
 		 * @param address The address of the lock
@@ -95,46 +96,43 @@ import java.nio.channels.FileChannel;
 			}
 		}
 
+		/**
+		 * {@inheritDoc}
+		 * @see com.heliosapm.unsafe.SpinLock#isLocked()
+		 */
 		@Override
 		public boolean isLocked() {
 			// TODO Auto-generated method stub
 			return false;
 		}
 
+		/**
+		 * {@inheritDoc}
+		 * @see com.heliosapm.unsafe.SpinLock#isLockedByMe()
+		 */
 		@Override
 		public boolean isLockedByMe() {
 			// TODO Auto-generated method stub
 			return false;
 		}
 
-		/** Indicates if this deallocatable has been refed */
-		private boolean refed = false;
-		
+
 		/**
 		 * {@inheritDoc}
-		 * @see com.heliosapm.unsafe.Deallocatable#isReferenced()
+		 * @see com.heliosapm.unsafe.Deallocatable#getReferenceId()
 		 */
 		@Override
-		public boolean isReferenced() {
-			try {
-				xlock();
-				return refed;
-			} finally {
-				xunlock();
-			}
+		public long getReferenceId() {
+			return address[1][0];
 		}
 
 		/**
 		 * {@inheritDoc}
-		 * @see com.heliosapm.unsafe.Deallocatable#setReferenced()
+		 * @see com.heliosapm.unsafe.Deallocatable#setReferenceId(long)
 		 */
 		@Override
-		public void setReferenced() {
-			try {
-				xlock();
-				refed = true;
-			} finally {
-				xunlock();
-			}			
+		public void setReferenceId(long referenceId) {
+			address[1][0] = referenceId;
+			
 		}
 	}

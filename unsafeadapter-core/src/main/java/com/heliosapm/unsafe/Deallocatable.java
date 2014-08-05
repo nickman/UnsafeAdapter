@@ -20,15 +20,19 @@ public interface Deallocatable {
 	public long[][] getAddresses();
 	
 	/**
-	 * Indicates if this Deallocatable has been referenced by an enqueued reference.
-	 * @return true if referenced, false otherwise
+	 * Returns the reference id assigned to this deallocatable.
+	 * <b>NOTE:</b> If a reference id has not been assigned (i.e. no call to {@link #getReferenceId()}
+	 * the implementation should return <b><code>0</code></b>.
+	 * @return the reference id or zero if one has not been assigned
 	 */
-	public boolean isReferenced();
+	public long getReferenceId();
 	
 	/**
-	 * Marks this Deallocatable as referenced by an enqueued reference
+	 * Sets the reference id.
+	 * <b>NOTE:</b> Should throw an exception if the ref id has already been set
+	 * @param referenceId The reference id assigned 
 	 */
-	public void setReferenced();
+	public void setReferenceId(long referenceId);
 	
 	
 	
