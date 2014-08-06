@@ -77,10 +77,10 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 * @return the index of the slot the address was inserted into
 	 */
 	public final int assignSlot(final long newAddress, final long size, final long alignmentOverhead) {
-		_address[0][0] = AllocationPointerOperations.assignSlot(_address[0][0], newAddress);
+		_address[0][0] = AllocationPointerOperations.assignSlot(_address[0][0], newAddress, size, alignmentOverhead);
 		if(refId[2]>1) {
-			_address[1][0] = AllocationPointerOperations.assignSlot(_address[1][0], size);
-			if(refId[2]>2) _address[2][0] = AllocationPointerOperations.assignSlot(_address[2][0], alignmentOverhead);
+			_address[1][0] = AllocationPointerOperations.assignSlot(_address[1][0], size, 0, 0);
+			if(refId[2]>2) _address[2][0] = AllocationPointerOperations.assignSlot(_address[2][0], alignmentOverhead, 0, 0);
 		}		
 		return AllocationPointerOperations.getLastIndex(_address[0][0]);
 	}

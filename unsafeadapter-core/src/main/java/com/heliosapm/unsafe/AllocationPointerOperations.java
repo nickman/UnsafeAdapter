@@ -54,6 +54,7 @@ import sun.misc.Unsafe;
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>com.heliosapm.unsafe.AllocationPointerOperations</code></p>
+ * TODO:  AP should contain size and overhead pointers within the base structure so the whole triplet can be referred to by one long.
  */
 @SuppressWarnings("restriction")
 public class AllocationPointerOperations {
@@ -146,50 +147,135 @@ public class AllocationPointerOperations {
 		return address;
 	}
 	
+	/**
+	 * Creates an internal AllocationPointer with no mem tracking, alignment tracking or ref id.
+	 * @return the new internal AllocationPointer
+	 */
+	static final long newAllocationPointer() {
+		return newAllocationPointer(false, false, 0L);
+	}
+
+	/**
+	 * Returns the dimension of the referenced AllocationPointer where the dimensions are:<ol>
+	 * 	<li>Simple address management</li>
+	 *  <li>Address management with memory tracking</li>
+	 *  <li>Address management with memory tracking and cache-line alignment overhead</li>
+	 * </ol>
+	 * @param address The address of the AllocationPointer
+	 * @return the dimension of the AllocationPointer
+	 */
+	public static final byte getDimension(final long address) {
+		return unsafe.getByte(address + DIM_OFFSET);
+	}
+	/**
+	 * Returns the reference id of the referenced AllocationPointer
+	 * @param address The address of the AllocationPointer
+	 * @return the reference id of the AllocationPointer
+	 */
+	public static final long getReferenceId(final long address) {
+		return unsafe.getLong(address + REFID_OFFSET);
+	}
+	
+//	/**
+//	 * Assigns the passed address to the next available slot in the referenced AllocationPointerOperations
+//	 * @param address The address of the allocation pointer memory block
+//	 * @param newAddress The address to assign to the next slot
+//	 * @return the new address of the memory block if it changed, or the original passed <code>address</code> if 
+//	 * the memory block had an available empty address slot
+//	 */
+//	public static final long assignSlot(final long address, final long newAddress, final long trackingAddress, final long size) {
+//		long addr = assignSlot(address, newAddress);
+//		
+//		return addr;
+//		
+//	}
 	
 	/**
-	 * Assigns the passed address to the next available slot in the referenced AllocationPointerOperations
-	 * @param address The address of the allocation pointer memory block
-	 * @param newAddress The address to assign to the next slot
-	 * @return the new address of the memory block if it changed, or the original passed <code>address</code> if 
-	 * the memory block had an available empty address slot
+	 * Finds the index of the passed address in the slots of the referenced AllocationPointer
+	 * @param address The address of the AllocationPointer
+	 * @param addressToFind The address to find the index for
+	 * @return the index of the passed address, or -1 if the address was not found
+	 * TODO: implement hashing function here to speed up finding an address
 	 */
-	public static final long assignSlot(final long address, final long newAddress) {
-		long addr = address;
-		if(isFull(address)) {
-			addr = extend(address);
+	public static final int findIndexForAddress(final long address, final long addressToFind) {
+		final int sz = getSize(address);
+		long indexedValue = -1;
+		for(int i = 0; i < sz; i++) {
+			indexedValue = AllocationPointerOperations.getAddress(address, i);
+			if(addressToFind==indexedValue) return i;
 		}
-		final int nextIndex = incrementSize(addr);
-		final long offset = HEADER_SIZE + (nextIndex * ADDRESS_SIZE);
-		unsafe.putAddress(addr + offset, newAddress);
-		return addr;
+		return -1;
 	}
 	
+	
+	
 	/**
-	 * Assigns the passed address to the next available slot in the referenced AllocationPointerOperations
-	 * @param address The address of the allocation pointer memory block
+	 * Assigns the passed address to the next available slot in the referenced AllocationPointer
+	 * @param address The address array of athe allocation pointer memory block which could be a length of:<ol>
+	 * 	<li>Simple address management</li>
+	 *  <li>Address management with memory tracking</li>
+	 *  <li>Address management with memory tracking and cache-line alignment overhead</li>
+	 * </ol>
 	 * @param newAddress The address to assign to the next slot
+	 * @param size The size of the memory block that the newAddress points to
+	 * @param alignmentOverhead the cache-line memory alignment overhead of the memory block that the newAddress points to
 	 * @return the new address of the memory block if it changed, or the original passed <code>address</code> if 
 	 * the memory block had an available empty address slot
 	 */
-	public static final long assignSlot(final long address, final long newAddress, final long trackingAddress, final long size) {
-		long addr = assignSlot(address, newAddress);
-		
-		return addr;
-		
+	public static final long assignSlot(final long address[], final long newAddress, final long size, final long alignmentOverhead) {		
+		final byte dim = getDimension(address[0]);
+		if(isFull(address[0])) {			
+			address[0] = extend(address[0]);
+			if(dim>1 && address.length>1) {
+				address[1] = extend(address[1]);
+				if(dim>2 && address.length>2) {
+					address[2] = extend(address[2]);
+				} else {
+					loge("Assign: AP Dimension and address length mismatch: [%s] vs [%s]", dim, address.length);
+				}				
+			} else {
+				loge("Assign: AP Dimension and address length mismatch: [%s] vs [%s]", dim, address.length);
+			}
+		}
+		final int nextIndex = incrementSize(address);
+		final long offset = HEADER_SIZE + (nextIndex * ADDRESS_SIZE);
+		unsafe.putAddress(address[0] + offset, newAddress);
+		if(dim>1 && address.length>1) {
+			unsafe.putAddress(address[1] + offset, size);
+			if(dim>2 && address.length>2) unsafe.putAddress(address[2] + offset, alignmentOverhead);
+		}
+		return address[0];  // could be re-allocated.
 	}
-	
 	
 	/**
 	 * Assigns the passed address to an existing slot in the referenced AllocationPointerOperations
-	 * @param address The address of the allocation pointer memory block
+	 * @param address The address array of athe allocation pointer memory block which could be a length of:<ol>
+	 * 	<li>Simple address management</li>
+	 *  <li>Address management with memory tracking</li>
+	 *  <li>Address management with memory tracking and cache-line alignment overhead</li>
+	 * </ol>
 	 * @param newAddress The address to assign to the next slot
+	 * @param size The size of the memory block that the newAddress points to
+	 * @param alignmentOverhead the cache-line memory alignment overhead of the memory block that the newAddress points to
 	 * @param index The index of the slot to write the address to
 	 */
-	public static final void reassignSlot(final long address, final long newAddress, int index) {		
-		if(index>=getSize(address)) throw new IllegalArgumentException("Invalid index [" + index + "]. Size is [" + getSize(address) + "]");
-		unsafe.putAddress(address + HEADER_SIZE + (index * ADDRESS_SIZE), newAddress);		
+	public static final void reassignSlot(final long address[], final long newAddress, final long size, final long alignmentOverhead, int index) {		
+		if(index>=getSize(address[0])) throw new IllegalArgumentException("Invalid index [" + index + "]. Size is [" + getSize(address[0]) + "]");
+		unsafe.putAddress(address[0] + HEADER_SIZE + (index * ADDRESS_SIZE), newAddress);
+		final byte dim = getDimension(address[0]);
+		if(dim>1 && address.length>1) {
+			unsafe.putAddress(address[1] + HEADER_SIZE + (index * ADDRESS_SIZE), size);
+			if(dim>2 && address.length>2) {
+				unsafe.putAddress(address[2] + HEADER_SIZE + (index * ADDRESS_SIZE), alignmentOverhead);
+			} else {
+				loge("Reassign: AP Dimension and address length mismatch: [%s] vs [%s]", dim, address.length);
+			}				
+		} else {
+			loge("Reassign: AP Dimension and address length mismatch: [%s] vs [%s]", dim, address.length);
+		}		
 	}
+	
+
 	
 	/**
 	 * Returns the keyAddresses of the allocated memory blocks referenced by the passed address as an array of longs
@@ -199,6 +285,7 @@ public class AllocationPointerOperations {
 	public static final long[] getAddresses(final long address) {
 		final int size = getSize(address);
 		long[] addresses = new long[size];
+		addresses[0] = address;
 		for(int i = 0; i < size; i++) {
 			addresses[i] = getAddress(address, i);
 		}		
@@ -224,7 +311,7 @@ public class AllocationPointerOperations {
 	 * @return the number of populated slots
 	 */
 	public static final int getSize(final long address) {
-		return unsafe.getInt(address + 4);
+		return unsafe.getInt(address + SIZE_OFFSET);
 	}
 	
 	/**
@@ -239,7 +326,7 @@ public class AllocationPointerOperations {
 	
 	/**
 	 * Returns the index of the most recently assigned address slot, or -1 if none are assigned
-	 * @param address the memory address of the AllocationPointerOperations
+	 * @param address the memory address of the AllocationPointer
 	 * @return the index of the most recently assigned address slot
 	 */
 	public static final int getLastIndex(final long address) {
@@ -250,7 +337,7 @@ public class AllocationPointerOperations {
 	/**
 	 * Determines if the memory block resident at the passed memory address is full.
 	 * i.e. if the size equals the capacity.
-	 * @param address the memory address of the AllocationPointerOperations
+	 * @param address the memory address of the AllocationPointer
 	 * @return true if full, false otherwise
 	 */
 	public static final boolean isFull(final long address) {
@@ -258,9 +345,9 @@ public class AllocationPointerOperations {
 	}
 	
 	/**
-	 * Returns the address at the specified index in the addressed AllocationPointerOperations
-	 * @param address the memory address of the AllocationPointerOperations
-	 * @param index the index of the AllocationPointerOperations's address slots to retrieve
+	 * Returns the address at the specified index in the addressed AllocationPointer
+	 * @param address the memory address of the AllocationPointer
+	 * @param index the index of the AllocationPointer's address slots to retrieve
 	 * @return the address as the specified index
 	 */
 	public static final long getAddress(final long address, final int index) {
@@ -271,16 +358,85 @@ public class AllocationPointerOperations {
 	}
 	
 	/**
+	 * Returns a long array containing the address, allocation size and alignment overhead 
+	 * at the specified index in the addressed AllocationPointer. If mem tracking and/or 
+	 * alignment overhead are not enabled, the corresponding arrray slots will be zero
+	 * @param address The address array of athe allocation pointer memory block which could be a length of:<ol>
+	 * 	<li>Simple address management</li>
+	 *  <li>Address management with memory tracking</li>
+	 *  <li>Address management with memory tracking and cache-line alignment overhead</li>
+	 * </ol>
+	 * @param index the index of the AllocationPointer's address slots to retrieve
+	 * @return the address as the specified index
+	 */
+	public static final long[] getTriplet(final long address[], final int index) {
+		if(address==null || address.length==0) throw new IllegalArgumentException("Address array was null or zero length");
+		final long[] triplet = new long[3];		
+		triplet[0] = getAddress(address[0], index);
+		final byte dim = getDimension(address[0]); 
+		if(dim != address.length) {
+			loge("Triplet: AP Dimension and address length mismatch: [%s] vs [%s]", dim, address.length);
+		} else {
+			if(dim>1) {
+				triplet[1] = getAddress(address[1], index);
+				if(dim>2) triplet[2] = getAddress(address[2], index);
+			}
+		}
+		return triplet;
+	}
+	
+	/**
+	 * Returns a long array containing the address, allocation size and alignment overhead 
+	 * at the specified index in the addressed AllocationPointer. If mem tracking and/or 
+	 * alignment overhead are not enabled, the arrray will be correspondingly smaller.
+	 * @param address The address array of the allocation pointer memory block which could be a length of:<ol>
+	 * 	<li>Simple address management</li>
+	 *  <li>Address management with memory tracking</li>
+	 *  <li>Address management with memory tracking and cache-line alignment overhead</li>
+	 * </ol>
+	 * @param index the index of the AllocationPointer's address slots to retrieve
+	 * @return the address as the specified index
+	 */
+	public static final long[] getSizedTriplet(final long address[], final int index) {
+		if(address==null || address.length==0) throw new IllegalArgumentException("Address array was null or zero length");
+		final byte dim = getDimension(address[0]);
+		if(dim != address.length) {
+			loge("Triplet: AP Dimension and address length mismatch: [%s] vs [%s]", dim, address.length);
+			return EMPTY_LONG_ARR;
+		}
+		final long[] triplet = new long[dim];		
+		triplet[0] = getAddress(address[0], index);
+		if(dim>1) {
+			triplet[1] = getAddress(address[1], index);
+			if(dim>2) triplet[2] = getAddress(address[2], index);
+		}
+		return triplet;
+	}
+	
+	
+	/**
 	 * Clears the address at the specified index in the addressed AllocationPointerOperations
-	 * @param address the memory address of the AllocationPointerOperations
+	 * @param address The address array of the allocation pointer memory block which could be a length of:<ol>
+	 * 	<li>Simple address management</li>
+	 *  <li>Address management with memory tracking</li>
+	 *  <li>Address management with memory tracking and cache-line alignment overhead</li>
+	 * </ol>
 	 * @param index the index of the AllocationPointerOperations's address slots to retrieve
 	 */
-	@SuppressWarnings("unused")
-	private static final void clearAddress(final long address, final int index) {
-		if(index < 0) throw new IllegalArgumentException("Invalid index: [" + index + "]");
-		final int size = getSize(address);
+	public static final void clearAddress(final long address[], final int index) {
+		if(address==null || address.length==0) throw new IllegalArgumentException("Address array was null or zero length");
+		final byte dim = getDimension(address[0]);
+		final int size = getSize(address[0]);
 		if(index > (size-1)) throw new IllegalArgumentException("Invalid index: [" + index + "]");
-		unsafe.putAddress(address + HEADER_SIZE + (index * ADDRESS_SIZE), 0L);
+		unsafe.putAddress(address[0] + HEADER_SIZE + (index * ADDRESS_SIZE), 0L);
+		if(dim != address.length) {
+			loge("Triplet: AP Dimension and address length mismatch: [%s] vs [%s]", dim, address.length);
+		} else {
+			if(dim>1) {
+				unsafe.putAddress(address[1] + HEADER_SIZE + (index * ADDRESS_SIZE), 0L);
+				if(dim>2) unsafe.putAddress(address[2] + HEADER_SIZE + (index * ADDRESS_SIZE), 0L);
+			}
+		}		
 	}
 	
 	
@@ -293,87 +449,128 @@ public class AllocationPointerOperations {
 	}
 	
 	/**
-	 * Prints the summary state of this AllocationPointerOperations
-	 * @param address the memory address of the AllocationPointerOperations
-	 * @return a string describing the status of the AllocationPointerOperations
+	 * Prints the summary state of an AllocationPointer
+	 * @param address The address array of the allocation pointer memory block which could be a length of:<ol>
+	 * 	<li>Simple address management</li>
+	 *  <li>Address management with memory tracking</li>
+	 *  <li>Address management with memory tracking and cache-line alignment overhead</li>
+	 * </ol>
+	 * @return a string describing the status of the AllocationPointer
 	 */
-	public static final String print(final long address) {
-		return String.format("AllocationPointerOperations >> [size: %s, capacity: %s, byteSize: %s]", getSize(address), getCapacity(address), getEndOffset(address));
+	public static final String print(final long address[]) {
+		if(address==null || address.length==0) throw new IllegalArgumentException("Address array was null or zero length");
+		final byte dim = getDimension(address[0]);
+		StringBuilder b = new StringBuilder(String.format("AllocationPointer >> [size: %s, capacity: %s, byteSize: %s]", getSize(address[0]), getCapacity(address[0]), getEndOffset(address[0])));
+		if(dim>1) {
+			b.append(String.format("\n\tAllocation Sizes >> [size: %s, capacity: %s, byteSize: %s]", getSize(address[1]), getCapacity(address[1]), getEndOffset(address[1])));
+			if(dim>2) b.append(String.format("\n\tAllocation Alignment Overheads >> [size: %s, capacity: %s, byteSize: %s]", getSize(address[2]), getCapacity(address[2]), getEndOffset(address[2])));
+		}
+		return b.toString();
 	}
 	
 	/**
-	 * Dumps the detailed state of the referenced AllocationPointerOperations
-	 * @param address the memory address of the AllocationPointerOperations
-	 * @return a string describing the status and contents of the AllocationPointerOperations
+	 * Prints the detailed state of an AllocationPointer
+	 * @param address The address array of the allocation pointer memory block which could be a length of:<ol>
+	 * 	<li>Simple address management</li>
+	 *  <li>Address management with memory tracking</li>
+	 *  <li>Address management with memory tracking and cache-line alignment overhead</li>
+	 * </ol>
+	 * @return a string describing the details of the AllocationPointer
+	 * FIXME: implement this
 	 */
-	public static final String dump(final long address) {
+	public static final String dump(final long address[]) {
+		if(address==null || address.length==0) throw new IllegalArgumentException("Address array was null or zero length");
+		final byte dim = getDimension(address[0]);		
 		StringBuilder b = new StringBuilder(print(address));
-		b.append("\n\tAddresses: [");
-		final int size = getSize(address);
-		if(size>0) {
-			for(int i = 0; i < size; i++) {
-				b.append(getAddress(address, i)).append(", ");
-			}			
-			b.deleteCharAt(b.length()-1);
-			b.deleteCharAt(b.length()-1);
-		}
-		return b.append("]").toString();
+//		b.append("\n\tAddresses: [");
+//		final int size = getSize(address);
+//		if(size>0) {
+//			for(int i = 0; i < size; i++) {
+//				b.append(getAddress(address, i)).append(", ");
+//			}			
+//			b.deleteCharAt(b.length()-1);
+//			b.deleteCharAt(b.length()-1);
+//		}
+//		return b.append("]").toString();
+		return b.toString();
 	}
 	
 	/** Empty long arr const */
 	public static final long[] EMPTY_LONG_ARR = {};
+	/** Empty long[] arr const */
+	public static final long[][] EMPTY_DLONG_ARR = {{}};
 	
 	/**
 	 * Frees all memory allocated within the referenced AllocationPointerOperations.
 	 * No includePostMortem is returned.
-	 * @param address the memory address of the AllocationPointerOperations
+	 * @param address The address array of the allocation pointer memory block which could be a length of:<ol>
+	 * 	<li>Simple address management</li>
+	 *  <li>Address management with memory tracking</li>
+	 *  <li>Address management with memory tracking and cache-line alignment overhead</li>
+	 * </ol>
 	 */
-	public static final void free(final long address) {
+	public static final void free(final long address[]) {
 		free(address, false);
 	}
 
 	
 	/**
 	 * Frees all memory allocated within the referenced AllocationPointerOperations
-	 * @param address the memory address of the AllocationPointerOperations
+	 * @param address The address array of the allocation pointer memory block which could be a length of:<ol>
+	 * 	<li>Simple address management</li>
+	 *  <li>Address management with memory tracking</li>
+	 *  <li>Address management with memory tracking and cache-line alignment overhead</li>
+	 * </ol>
 	 * @param includePostMortem If true, the returned array will have all the formerly allocated addresses,
 	 * otherwise will be zero length.
 	 * @return The [possibly empty] array of addresses just deallocated
 	 */
-	public static final long[] free(final long address, final boolean includePostMortem) {
-		final int size = getSize(address);
-		long[] deadAddresses = includePostMortem ? size>0 ? new long[size] : EMPTY_LONG_ARR : EMPTY_LONG_ARR;
+	public static final long[][] free(final long address[], final boolean includePostMortem) {
+		if(address==null || address.length==0) throw new IllegalArgumentException("Address array was null or zero length");
+		final byte dim = getDimension(address[0]);				
+		final int size = getSize(address[0]);
+		long[][] deadAddresses = includePostMortem ? size>0 ? new long[size][dim] : EMPTY_DLONG_ARR : EMPTY_DLONG_ARR;
 		if(size>0) {
 			if(includePostMortem) {
 				for(int i = 0; i < size; i++) {
-					long addr = getAddress(address, i);
-					deadAddresses[i] = addr;
-					if(addr>0) {
-						unsafe.freeMemory(addr);
+					long[] triplet = getSizedTriplet(address, i);
+					deadAddresses[i] = triplet;
+					if(triplet[0]>0) {
+						unsafe.freeMemory(triplet[0]);
 					}
 				}				
 			} else {
 				for(int i = 0; i < size; i++) {
-					long addr = getAddress(address, i);
+					long addr = getAddress(address[0], i);
 					if(addr>0) {
 						unsafe.freeMemory(addr);
 					}
 				}
 			}
 		}
-		unsafe.freeMemory(address);
+		unsafe.freeMemory(address[0]);
+		if(dim>1) {
+			unsafe.freeMemory(address[1]);
+			if(dim>2) unsafe.freeMemory(address[2]);
+		}		
 		return deadAddresses;
 	}
 	
 	
 	/**
-	 * Increments the size of the AllocationPointerOperations to represent an added address.
-	 * @param address The address of the allocation pointer memory block
-	 * @return the index of the next open slot
+	 * Increments the size of the AllocationPointer to represent an added address.
+	 * @param addresses The addresses of the AllocationPointer memory blocks to increment the size for
+	 * @return the index of the next open slot from the first address
 	 */
-	public static final int incrementSize(final long address) {
-		int nextSize = getSize(address); 
-		unsafe.putInt(address + 4, nextSize + 1);
+	public static final int incrementSize(final long...addresses) {
+		int nextSize  = 0;
+		if(addresses!=null && addresses.length > 0) {
+			nextSize = getSize(addresses[0]);
+			unsafe.putInt(addresses[0] + SIZE_OFFSET, nextSize + 1);
+			for(int i = 1; i < addresses.length; i++) {
+				unsafe.putInt(addresses[i] + SIZE_OFFSET, nextSize + 1);
+			}
+		}
 		return nextSize;
 	}
 	
@@ -415,36 +612,36 @@ public class AllocationPointerOperations {
 	
 	private AllocationPointerOperations() {}
 	
-	/**
-	 * Command line quickie test
-	 * @param args None
-	 */
-	public static void main(String[] args) {
-		log("AllocationPointerOperations Test: Address Size: %s", ADDRESS_SIZE);
-		int warmup = Integer.parseInt(args[0]) * (ALLOC_SIZE+10);
-		int actual = Integer.parseInt(args[1]) * (ALLOC_SIZE+10);
-		int innerLoops = 100;
-		for(int i = 0; i < warmup; i++) {
-			long address = newAllocationPointer();
-			for(int x = 0; x < innerLoops; x++) {
-				address = assignSlot(address, unsafe.allocateMemory(8));
-			}
-			free(address);			
-		}
-		log("Warmup Complete");
-		long start = System.currentTimeMillis();
-		for(int i = 0; i < actual; i++) {
-			long address = newAllocationPointer();
-			for(int x = 0; x < innerLoops; x++) {
-				address = assignSlot(address, unsafe.allocateMemory(8));
-			}
-			free(address);			
-		}
-		long end = System.currentTimeMillis();
-		log("Elpased time: %s ms", (end-start));
-//		log("Activity:\n\tAllocations: %s\n\tReallocations: %s", initialAllocations.get(), reAllocations.get());
-		
-	}
+//	/**
+//	 * Command line quickie test
+//	 * @param args None
+//	 */
+//	public static void main(String[] args) {
+//		log("AllocationPointerOperations Test: Address Size: %s", ADDRESS_SIZE);
+//		int warmup = Integer.parseInt(args[0]) * (ALLOC_SIZE+10);
+//		int actual = Integer.parseInt(args[1]) * (ALLOC_SIZE+10);
+//		int innerLoops = 100;
+//		for(int i = 0; i < warmup; i++) {
+//			long address = newAllocationPointer();
+//			for(int x = 0; x < innerLoops; x++) {
+//				address = assignSlot(address, unsafe.allocateMemory(8));
+//			}
+//			free(address);			
+//		}
+//		log("Warmup Complete");
+//		long start = System.currentTimeMillis();
+//		for(int i = 0; i < actual; i++) {
+//			long address = newAllocationPointer();
+//			for(int x = 0; x < innerLoops; x++) {
+//				address = assignSlot(address, unsafe.allocateMemory(8));
+//			}
+//			free(address);			
+//		}
+//		long end = System.currentTimeMillis();
+//		log("Elpased time: %s ms", (end-start));
+////		log("Activity:\n\tAllocations: %s\n\tReallocations: %s", initialAllocations.get(), reAllocations.get());
+//		
+//	}
 	
 	/**
 	 * Low maintenance out logger
