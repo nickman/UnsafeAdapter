@@ -150,7 +150,7 @@ public class AllocationReferenceManager implements Runnable {
 					
 				}
 				if(memTracking && ref instanceof AllocationPointerPhantomRef) {
-					decrementMemTracking(((AllocationPointerPhantomRef)ref).getClearedAddresses());					
+//					decrementMemTracking(((AllocationPointerPhantomRef)ref).getClearedAddresses());					
 				} else {
 					if(memTracking && InterfaceTracker.isDeallocatable(ifaceTracker.getMask(ref))) {
 						final long[][] addrs = ((Deallocatable)ref).getAddresses();

@@ -62,6 +62,7 @@ import com.heliosapm.unsafe.SafeMemoryAllocator;
 import com.heliosapm.unsafe.UnsafeAdapter;
 
 import sun.misc.Unsafe;
+import test.com.heliosapm.unsafe.junit.PrepareLifecycle;
 import test.com.heliosapm.unsafe.junit.PrepareTestClass;
 
 
@@ -73,7 +74,7 @@ import test.com.heliosapm.unsafe.junit.PrepareTestClass;
  * <p><code>test.com.heliosapm.unsafe.BaseTest</code></p>
  */
 @Ignore
-public class BaseTest {
+public class BaseTest implements PrepareLifecycle {
 	/** The currently executing class name */
 	@Rule public final PrepareTestClass cname = new PrepareTestClass();
 	/** A random value generator */
@@ -415,6 +416,16 @@ public class BaseTest {
 		} else {
 			Assert.assertEquals("Mem Total Post DeAlloc was unexpected. --> ", untrackedValue, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
 		}
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see test.com.heliosapm.unsafe.junit.PrepareLifecycle#beforeTestClass()
+	 */
+	@Override
+	public void beforeTestClass() {
+		/* No Op */
+		
 	}
 	
 	

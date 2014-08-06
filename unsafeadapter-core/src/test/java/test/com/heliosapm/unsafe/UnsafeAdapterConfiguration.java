@@ -30,6 +30,8 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+import com.heliosapm.unsafe.AllocationPointerOperations;
+
 /**
  * <p>Title: UnsafeAdapterConfiguration</p>
  * <p>Description: Annotation to configure the UnsafeAdapter configuration for the class under test</p> 
@@ -59,4 +61,15 @@ public @interface UnsafeAdapterConfiguration {
 	 * Only applicable if {@link #unsafe()} is false.
 	 */
 	public boolean offHeap() default false;
+	
+	/**
+	 * true to enable managed memory allocation in the AP
+	 */
+	public boolean apManaged() default AllocationPointerOperations.DEFAULT_MANAGED_ALLOC;
+	
+	
+	/**
+	 * The initial and extend allocation size for the AllocationPonter
+	 */
+	public int apAllocSize() default AllocationPointerOperations.DEFAULT_ALLOC_SIZE_PROP;
 }

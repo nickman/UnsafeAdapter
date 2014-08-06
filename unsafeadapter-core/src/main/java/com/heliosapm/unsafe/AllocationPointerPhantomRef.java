@@ -36,16 +36,28 @@ import java.lang.ref.ReferenceQueue;
  */
 class AllocationPointerPhantomRef extends PhantomReference<Object> implements AllocationTracker {
 	/** The address that the referenced AllocationPointer pointed to */
-	private final long[][] address;
+	private final long address;
 	
 	/** The UnsafeAdapter provided reference id */
 	private final long refId;
 
 	
-	/** A copy of the original addresses once the allocations have been cleared.
-	 *   Copied for allocation tracking
+	/** 
+	 * A copy of the original addresses once the allocations have been cleared.
+	 * The format of the array is: <ul>
+	 * 	<li><b>long[0]</b> : The cleared addresses</li>
+	 *  <li><b>long[1]</b> : The size of the memory allocation formerly at the address (Optional)</li>
+	 *  <li><b>long[2]</b> : The alignment overhead of the memory allocation formerly at the address (Optional)</li>
+	 * </ul>
+	 * The size and alignment overhead array entries may not be present, so the length of the returned array should be tested.
+	 * If alignment overhead is enabled, size will be too, so possible lengths are: <ol>
+	 * 	<li>The cleared addresses only.</li>
+	 *  <li>The cleared addresses and the memory allocation sizes</li>
+	 *  <li>The cleared addresses, the memory allocation sizes and the alignment overheads</li>
+	 * </ol>
+	 * Copied for allocation tracking
 	 */
-	private long[] clearedAddresses = null;
+	private long[][] clearedAddresses = null;
 	
 	/**
 	 * Creates a new AllocationPointerPhantomRef
@@ -69,27 +81,24 @@ class AllocationPointerPhantomRef extends PhantomReference<Object> implements Al
 	}
 	
 	/**
-	 * Returns the cleared addresses
+	 * Returns the cleared addresses (and possibly the memory allocation sizes and alignment overheads)</li>
 	 * @return the cleared addresses
 	 */
-	public long[] getClearedAddresses() {
+	public long[][] getClearedAddresses() {
 		return clearedAddresses;
 	}
 	
 	/**
+	 * <p>Clears the referenced AllocationPointer and associated tracking subsidiaries and frees all the allocated memory.
 	 * {@inheritDoc}
 	 * @see java.lang.ref.Reference#clear()
 	 */
 	public void clear() {
-		if(address!=null && address.length!=0) {
-			if(address[0][0] > 0) {
-				clearedAddresses = AllocationPointerOperations.free(address[0][0], true);
-				address[0][0] = 0;
-			} else {
-				clearedAddresses = AllocationPointerOperations.EMPTY_LONG_ARR;
-			}
+		if(address[0][0] > 0) {
+			clearedAddresses = AllocationPointerOperations.free(address[0], true);
+			address[0][0] = 0;
 		} else {
-			clearedAddresses = AllocationPointerOperations.EMPTY_LONG_ARR;
+			clearedAddresses = AllocationPointerOperations.EMPTY_DLONG_ARR;
 		}
 		super.clear();
 	}
@@ -104,9 +113,8 @@ class AllocationPointerPhantomRef extends PhantomReference<Object> implements Al
 	 * @see com.heliosapm.unsafe.AllocationTracker#add(long, long, long)
 	 */
 	@Override
-	public void add(long address, long allocationSize, long alignmentOverhead) {
-		// TODO Auto-generated method stub
-		
+	public void add(long newAddress, long allocationSize, long alignmentOverhead) {
+		AllocationPointerOperations.assignSlot(address[0], newAddress, allocationSize, alignmentOverhead);		
 	}
 
 	/**

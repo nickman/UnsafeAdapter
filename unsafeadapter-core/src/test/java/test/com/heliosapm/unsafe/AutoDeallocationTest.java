@@ -43,9 +43,9 @@ import com.heliosapm.unsafe.UnsafeAdapter;
 public class AutoDeallocationTest extends BaseTest {
 	
 	@Test
-//	@Ignore
+	@Ignore
 	public void testAllocationPointer() throws Exception {
-		AllocationPointer ap = new AllocationPointer();
+		AllocationPointer ap = UnsafeAdapter.newAllocationPointer();
 		try {
 			final int valueCount = Math.abs(RANDOM.nextInt(100)) + 100;
 			final long[] writeValues = new long[valueCount];

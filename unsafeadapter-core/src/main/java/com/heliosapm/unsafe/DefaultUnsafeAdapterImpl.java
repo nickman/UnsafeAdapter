@@ -126,7 +126,11 @@ public class DefaultUnsafeAdapterImpl implements DefaultUnsafeAdapterImplMBean {
 		// Read the system props to get the configuration
 		// =========================================================        
     	trackMem = System.getProperties().containsKey(UnsafeAdapter.TRACK_ALLOCS_PROP); // || isDebugAgentLoaded();   
-    	alignMem = System.getProperties().containsKey(UnsafeAdapter.ALIGN_ALLOCS_PROP);
+    	if(trackMem) {
+    		alignMem = System.getProperties().containsKey(UnsafeAdapter.ALIGN_ALLOCS_PROP);
+    	} else {
+    		alignMem = false;
+    	}
     	refMgr = new AllocationReferenceManager(trackMem, alignMem);
     	registerJmx();
 	}

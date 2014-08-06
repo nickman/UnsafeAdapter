@@ -182,24 +182,39 @@ public class UnsafeAdapter {
 		}
 	}
 	
-//	// =====================================================================================================
-//	// AllocationPointer Requests
-//	// =====================================================================================================
-//	
-//    /** Serial number factory for memory allocation references */
-//	protected static final AtomicLong refSerial = new AtomicLong(0L);
-//	
-//	
-//	/**
-//	 * Returns a new {@link AllocationPointer} that is ref queue registered 
-//	 * and configured according to mem tracking and mem alignment settings. 
-//	 * @return a new AllocationPointer
-//	 */
-//	public static final AllocationPointer newAllocationPointer() {
-//		final AllocationPointer ap = new AllocationPointer(adapter.trackMem, adapter.alignMem, refSerial.incrementAndGet());
-//		Reference<Object> ref = ap.getReference(adapter.refQueue);
-//		return ap;
-//	}
+	// =====================================================================================================
+	// Static config
+	// =====================================================================================================
+	
+	/**
+	 * Indicates if allocated memory size tracking is enabled 
+	 * @return true if allocated memory size tracking is enabled, false otherwise
+	 */
+	public static boolean isMemTrackingEnabled() {
+		return adapter.trackMem;
+	}
+	
+	/**
+	 * Indicates if cache-line memory alignment overhead tracking is enabled 
+	 * @return true if cache-line memory alignment overhead tracking is enabled, false otherwise
+	 */
+	public static boolean isAlignmentTrackingEnabled() {
+		return adapter.alignMem;
+	}
+	
+	
+	// =====================================================================================================
+	// AllocationPointer Requests
+	// =====================================================================================================
+
+	/**
+	 * Returns a new {@link AllocationPointer} that is ref queue registered 
+	 * and configured according to mem tracking and mem alignment settings. 
+	 * @return a new AllocationPointer
+	 */
+	public static final AllocationPointer newAllocationPointer() {
+		return adapter.refMgr.newAllocationPointer();
+	}
 	
 	// =====================================================================================================
 	// Configuration reads

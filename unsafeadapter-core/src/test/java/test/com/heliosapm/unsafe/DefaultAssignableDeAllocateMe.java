@@ -62,15 +62,6 @@ public class DefaultAssignableDeAllocateMe implements Deallocatable, AddressAssi
 		return addresses;
 	}
 	
-	/**
-	 * {@inheritDoc}
-	 * @see com.heliosapm.unsafe.AddressAssignable#setAllocated(long)
-	 */
-	@Override
-	public void setAllocated(long address) {
-		addresses[0][getNextIndex()] = address;
-		
-	}
 
 	/**
 	 * Returns the index of the next unallocated address slot
@@ -98,6 +89,16 @@ public class DefaultAssignableDeAllocateMe implements Deallocatable, AddressAssi
 	@Override
 	public void setReferenceId(long referenceId) {
 		addresses[1][0] = referenceId;
+		
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.AddressAssignable#setAllocated(long, long, long)
+	 */
+	@Override
+	public void setAllocated(long address, long size, long alignmentOverhead) {
+		// TODO Auto-generated method stub
 		
 	}
 	

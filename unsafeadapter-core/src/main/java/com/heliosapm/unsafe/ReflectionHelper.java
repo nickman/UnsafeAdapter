@@ -99,6 +99,67 @@ public class ReflectionHelper {
 	}
 	
 	
+	public static void setFieldValue(Class<?> clazz, String fieldName, Object value) {
+		setFieldValue(clazz, null, fieldName, value);
+	}
+	
+	public static void setFieldValue(Class<?> clazz, Object target, String fieldName, Object value) {
+		try {			
+			Field targetField = clazz.getDeclaredField(fieldName);
+			boolean modifiedAccess = false;
+			boolean modifiedWriteability = false;
+			try {
+				if(!targetField.isAccessible()) {
+						targetField.setAccessible(true);
+						modifiedAccess = true;
+				}
+				if(Modifier.isFinal(targetField.getModifiers())) {
+					targetField = setFieldEditable(clazz, fieldName);
+					modifiedWriteability = true;
+				}
+				if(targetField.getType().isPrimitive()) {
+					setFieldPrimitive(target, targetField, value);
+				} else {
+					targetField.set(target, value);
+				}
+			} finally {
+				if(modifiedAccess) targetField.setAccessible(false);
+				if(modifiedWriteability) setFieldReadOnly(clazz, fieldName);
+			}
+		} catch (Exception ex) {
+			throw new RuntimeException(ex);
+		}
+	}
+	
+	
+	public static void setFieldPrimitive(Object target, Field field, Object value) {
+		try {
+			final Class<?> c = field.getType();
+			if(c==boolean.class) {
+				field.setBoolean(target, (Boolean)value);
+			} else if(c==byte.class) {
+				field.setByte(target, ((Number)value).byteValue());
+			} else if(c==char.class) {
+				field.setChar(target, (Character)value);
+			} else if(c==short.class) {
+				field.setShort(target, ((Number)value).shortValue());
+			} else if(c==int.class) {
+				field.setInt(target, ((Number)value).intValue());
+			} else if(c==float.class) {
+				field.setFloat(target, ((Number)value).floatValue());
+			} else if(c==long.class) {
+				field.setLong(target, ((Number)value).longValue());
+			} else if(c==double.class) {
+				field.setDouble(target, ((Number)value).doubleValue());
+			} else {
+				throw new RuntimeException("WTF ? --->  [" + c.getName() + "]");
+			}
+		} catch (Exception ex) {
+			throw new RuntimeException(ex);
+		}
+			
+	}
+	
 	/**
 	 * Reflectively invokes a method 
 	 * @param clazz The class defining the method to invoke

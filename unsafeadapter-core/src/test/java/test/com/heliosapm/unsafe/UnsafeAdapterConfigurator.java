@@ -24,6 +24,7 @@
  */
 package test.com.heliosapm.unsafe;
 
+import com.heliosapm.unsafe.AllocationPointerOperations;
 import com.heliosapm.unsafe.ReflectionHelper;
 import com.heliosapm.unsafe.UnsafeAdapter;
 
@@ -36,6 +37,9 @@ import com.heliosapm.unsafe.UnsafeAdapter;
  */
 
 public class UnsafeAdapterConfigurator {
+	
+	/** The number of properties to compare */
+	public static final int PROP_SIZE = 6;
 	
 	/** The default unsafe adapter configuration */
 	public static final UnsafeAdapterConfiguration DEFAULT_CONFIG;
@@ -56,6 +60,20 @@ public class UnsafeAdapterConfigurator {
 		if(requiresReset(uac)) {
 			doReset(uac);
 		}
+	}
+	
+	/**
+	 * Returns the annotated configuration for the passed class
+	 * @param clazz The class to read the configuration from
+	 * @return the annotated configuration for the passed class, with the default configuration being returned
+	 * if the passed class was not annotated with @UnsafeAdapterConfiguration 
+	 */
+	public static UnsafeAdapterConfiguration getClassConfiguration(Class<?> clazz) {
+		UnsafeAdapterConfiguration uac = clazz.getAnnotation(UnsafeAdapterConfiguration.class);
+		if(uac==null) {
+			uac = UnsafeAdapterConfigurator.DEFAULT_CONFIG;
+		}			
+		return uac;
 	}
 	
 	/**
@@ -93,10 +111,23 @@ public class UnsafeAdapterConfigurator {
 		} else {
 			System.setProperty(UnsafeAdapter.SAFE_ALLOCS_ONHEAP_PROP, "true");
 		}
+		if(uac.apManaged()) {
+			System.setProperty(AllocationPointerOperations.MANAGED_ALLOC_PROP, "true");		
+			ReflectionHelper.invoke(AllocationPointerOperations.class, "enableManagement");
+		} else {
+			System.clearProperty(AllocationPointerOperations.MANAGED_ALLOC_PROP);
+			ReflectionHelper.invoke(AllocationPointerOperations.class, "disableManagement");
+		}
+		
 		ReflectionHelper.invoke(UnsafeAdapter.class, "reset");
+		if(AllocationPointerOperations.ALLOC_SIZE != uac.apAllocSize()) {
+			System.setProperty(AllocationPointerOperations.ALLOC_SIZE_PROP, "" + uac.apAllocSize());
+			ReflectionHelper.setFieldValue(AllocationPointerOperations.class, "ALLOC_SIZE", uac.apAllocSize());
+		}
 	}
 	
-
+	// ALLOC_MEM_SIZE = ALLOC_SIZE 
+	// Reset these on reset
 	
 	/**
 	 * Determines if the passed test class has an UnsafeAdapter configuration that will require a reset
@@ -121,9 +152,9 @@ public class UnsafeAdapterConfigurator {
 	 * @return true if a reset is required, false otherwise
 	 */
 	public static boolean requiresReset(UnsafeAdapterConfiguration uac) {
-		final boolean[] current = getCurrentConfiguration();
-		final boolean[] requested = getRequestedConfiguration(uac);
-		int indexCnt = requested[0] ? 3 : 4;
+		final int[] current = getCurrentConfiguration();
+		final int[] requested = getRequestedConfiguration(uac);
+		int indexCnt = requested[0]==1 ? PROP_SIZE-1 : PROP_SIZE;
 		for(int i = 0; i < indexCnt; i++ ) {
 			if(current[i] != requested[i]) return true;
 		}
@@ -132,29 +163,31 @@ public class UnsafeAdapterConfigurator {
 	
 	/**
 	 * Returns the current UnsafeAdapter configuration
-	 * @return an array of booleans indicating the current configuration
+	 * @return an array of ints indicating the current configuration
 	 */
-	public static boolean[] getCurrentConfiguration() {
-		final boolean[] current = new boolean[4];
-		current[0] = !UnsafeAdapter.getMemoryMBean().isSafeMemory();
-		current[1] = UnsafeAdapter.getMemoryMBean().isTrackingEnabled();
-		current[2] = UnsafeAdapter.getMemoryMBean().isAlignmentEnabled();
-		current[3] = UnsafeAdapter.getMemoryMBean().isSafeMemoryOffHeap();
+	public static int[] getCurrentConfiguration() {
+		final int[] current = new int[PROP_SIZE];
+		current[0] = !UnsafeAdapter.getMemoryMBean().isSafeMemory() ? 1 : 0;
+		current[1] = UnsafeAdapter.getMemoryMBean().isTrackingEnabled() ? 1 : 0;
+		current[2] = UnsafeAdapter.getMemoryMBean().isAlignmentEnabled() ? 1 : 0;
+		current[3] = UnsafeAdapter.getMemoryMBean().isSafeMemoryOffHeap() ? 1 : 0;
+		current[4] = AllocationPointerOperations.ALLOC_SIZE; 
 		return current;
 	}
 	
 	/**
 	 * Returns the UnsafeAdapter configuration as defined by the passed @UnsafeAdapterConfiguration instance
 	 * @param config The @UnsafeAdapterConfiguration instance to test
-	 * @return an array of booleans indicating the configuration of the passed @UnsafeAdapterConfiguration instance
+	 * @return an array of ints indicating the configuration of the passed @UnsafeAdapterConfiguration instance
 	 */
-	public static boolean[] getRequestedConfiguration(UnsafeAdapterConfiguration config) {
-		final boolean[] current = new boolean[4];
-		current[0] = config.unsafe();
-		current[1] = config.memTracking();
-		current[2] = config.memAlignment();
-		current[3] = config.offHeap();
-		return current;
+	public static int[] getRequestedConfiguration(UnsafeAdapterConfiguration config) {
+		final int[] requested = new int[PROP_SIZE];
+		requested[0] = config.unsafe() ? 1 : 0;
+		requested[1] = config.memTracking() ? 1 : 0;
+		requested[2] = config.memAlignment() ? 1 : 0;
+		requested[3] = config.offHeap() ? 1 : 0;
+		requested[4] = config.apAllocSize();
+		return requested;
 	}
 	
 	/**
@@ -166,7 +199,9 @@ public class UnsafeAdapterConfigurator {
 		StringBuilder b = new StringBuilder("Requested: [")
 			.append("Unsafe:").append(config.unsafe()).append(", ")
 			.append("Mem Tracking:").append(config.memTracking()).append(", ")
-			.append("Mem Alignment:").append(config.memAlignment());
+			.append("Mem Alignment:").append(config.memAlignment()).append(", ")
+			.append("AP Alloc Size:").append(config.apAllocSize()).append(", ")
+			.append("AP Managed:").append(config.apManaged());
 		if(!config.unsafe()) {
 			b.append(", Safe OffHeap:").append(config.offHeap());
 		}		
@@ -181,7 +216,9 @@ public class UnsafeAdapterConfigurator {
 		StringBuilder b = new StringBuilder("Actual   : [")
 			.append("Unsafe:").append(!UnsafeAdapter.getMemoryMBean().isSafeMemory()).append(", ")
 			.append("Mem Tracking:").append(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()).append(", ")
-			.append("Mem Alignment:").append(UnsafeAdapter.getMemoryMBean().isAlignmentEnabled());
+			.append("Mem Alignment:").append(UnsafeAdapter.getMemoryMBean().isAlignmentEnabled()).append(", ")
+			.append("AP Alloc Size:").append(AllocationPointerOperations.ALLOC_SIZE).append(", ")
+			.append("AP Managed:").append(AllocationPointerOperations.MANAGED_ALLOC);
 		if(UnsafeAdapter.isSafeAdapter()) {
 			b.append(", Safe OffHeap:").append(UnsafeAdapter.getMemoryMBean().isSafeMemoryOffHeap());
 		}			

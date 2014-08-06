@@ -64,6 +64,7 @@ public class PrepareTestClass extends TestWatcher {
 		className = testClass.getName();
 		methodName = d.getMethodName();
 		displayName = d.getDisplayName();
+		
 		log("\n\t>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n\tRunning Test [%s.%s]\n\t>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n", testClass.getSimpleName(),  methodName);		
 		if(!preparedClasses.contains(testClass)) {
 			log("Preparing Test Class [%s]", className);

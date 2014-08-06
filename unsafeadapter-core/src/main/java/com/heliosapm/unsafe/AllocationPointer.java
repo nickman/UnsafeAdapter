@@ -38,16 +38,22 @@ import java.lang.ref.ReferenceQueue;
 
 public class AllocationPointer implements ReferenceProvider<Object>, AddressAssignable {
 	/** The address of the memory block allocated for this AllocationPointer */
-	private final long[][] _address;
+	private final long address;
 	/** The phantom reference to this allocation pointer if one has been requested */
 	private PhantomReference<Object> phantomRef = null;
-	
-	/** The UnsafeAdapter provided reference id */
-	private final long[] refId;
 
 	// =====================================
 	//  MUST BE CREATED BY UA
 	// =====================================
+	
+	/**
+	 * Returns the address base for this AllocationPointer.
+	 * <b>USE CAREFULLY</b> 
+	 * @return the address base for this AllocationPointer.
+	 */
+	public final long[] getAddressBase() {
+		return AllocationPointerOperations.getAddressBase(address);
+	}
 	
 	/**
 	 * Creates a new AllocationPointer with the default capacity ({@link AllocationPointerOperations#ALLOC_SIZE})
@@ -56,16 +62,7 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 * @param refId The UnsafeAdapter's ref manager assigned reference id
 	 */
 	AllocationPointer(boolean memTracking, boolean memAlignment, long refId) {
-		final int config = 1 + (memTracking ? (1 + (memAlignment ? 1 : 0)) : 0);		
-		this.refId = new long[]{refId, config};
-		_address = new long[config][1];
-		_address[0][0] = AllocationPointerOperations.newAllocationPointer();
-		if(memTracking) {
-			_address[1][0] = AllocationPointerOperations.newAllocationPointer();
-			if(memAlignment) {
-				_address[2][0] = AllocationPointerOperations.newAllocationPointer();
-			}
-		}
+		address = AllocationPointerOperations.newAllocationPointer(memTracking, memAlignment, refId);
 	}
 	
 	
@@ -77,13 +74,20 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 * @return the index of the slot the address was inserted into
 	 */
 	public final int assignSlot(final long newAddress, final long size, final long alignmentOverhead) {
-		_address[0][0] = AllocationPointerOperations.assignSlot(_address[0][0], newAddress, size, alignmentOverhead);
-		if(refId[2]>1) {
-			_address[1][0] = AllocationPointerOperations.assignSlot(_address[1][0], size, 0, 0);
-			if(refId[2]>2) _address[2][0] = AllocationPointerOperations.assignSlot(_address[2][0], alignmentOverhead, 0, 0);
-		}		
-		return AllocationPointerOperations.getLastIndex(_address[0][0]);
+		AllocationPointerOperations.assignSlot(address, newAddress, size, alignmentOverhead);
+		return AllocationPointerOperations.getLastIndex(address);
 	}
+	
+	/**
+	 * Assigns the passed address to the next available slot
+	 * @param newAddress The address to assign to the next slot
+	 * @return the index of the slot the address was inserted into
+	 */
+	public final int assignSlot(final long newAddress) {
+		AllocationPointerOperations.assignSlot(address, newAddress, 0L, 0L);
+		return AllocationPointerOperations.getLastIndex(address);
+	}
+	
 	
 	/**
 	 * {@inheritDoc}
@@ -104,7 +108,7 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 */
 	public final void reassignSlot(final long oldAddress, final long newAddress, final long size, final long alignmentOverhead) { // final int index
 		final int index = findIndexForAddress(oldAddress);		
-		if(index==-1) throw new RuntimeException("Address [" + oldAddress + "] not registered for AllocationPointer [" + refId + "]");
+		if(index==-1) throw new RuntimeException("Address [" + oldAddress + "] not registered for AllocationPointer [" + AllocationPointerOperations.getReferenceId(address) + "]");
 		reassignSlot(index, newAddress, size, alignmentOverhead);		
 	}
 	
@@ -116,29 +120,27 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 * @param alignmentOverhead The new alignment overhead being registered in bytes
 	 */
 	public final void reassignSlot(final int index, final long newAddress, final long size, final long alignmentOverhead) {		
-		AllocationPointerOperations.reassignSlot(_address[0][0], newAddress, index);
-		if(refId[2]>1){
-			AllocationPointerOperations.reassignSlot(_address[1][0], size, index);
-			if(refId[2]>2) AllocationPointerOperations.reassignSlot(_address[2][0], alignmentOverhead, index);
-		}
+		AllocationPointerOperations.reassignSlot(address, newAddress, size, alignmentOverhead, index);
 	}
 	
+	/**
+	 * Assigns the passed address to an existing slot. 
+	 * @param index The index of the slot
+	 * @param newAddress The address to assign to the next slot
+	 */
+	public final void reassignSlot(final int index, final long newAddress) {		
+		AllocationPointerOperations.reassignSlot(address, newAddress, 0L, 0L, index);
+	}
 	
 	
 	/**
 	 * Finds the index of the passed address
-	 * @param address The address to get the index
+	 * @param addressToFind The address to get the index for
 	 * @return the index of the passed address, or -1 if the address was not found
 	 * TODO: implement hashing function here to speed up finding an address
 	 */
-	private final int findIndexForAddress(final long address) {
-		final int sz = getSize();
-		long indexedValue = -1;
-		for(int i = 0; i < sz; i++) {
-			indexedValue = AllocationPointerOperations.getAddress(_address[0][0], i);
-			if(address==indexedValue) return i;
-		}
-		return -1;
+	private final int findIndexForAddress(final long addressToFind) {
+		return AllocationPointerOperations.findIndexForAddress(address, addressToFind);
 	}
 	
 //	/**
@@ -146,7 +148,7 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 //	 * @return an array of keyAddresses
 //	 */
 //	public final long[][] getAddresses() {
-//		return _address;
+//		return address;
 //	}
 	
 	/**
@@ -154,7 +156,7 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 * @return the number of populated slots
 	 */
 	public final int getSize() {
-		return AllocationPointerOperations.getSize(_address[0][0]);
+		return AllocationPointerOperations.getSize(address);
 	}
 	
 	/**
@@ -162,7 +164,7 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 * @return the number of allocated slots
 	 */
 	public final int getCapacity() {
-		return AllocationPointerOperations.getCapacity(_address[0][0]);
+		return AllocationPointerOperations.getCapacity(address);
 	}
 	
 	/**
@@ -170,7 +172,7 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 * @return the index of the most recently assigned address slot
 	 */
 	public final int getLastIndex() {
-		return AllocationPointerOperations.getLastIndex(_address[0][0]);
+		return AllocationPointerOperations.getLastIndex(address);
 	}
 	
 	/**
@@ -179,7 +181,7 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 * @return true if full, false otherwise
 	 */
 	public final boolean isFull() {
-		return AllocationPointerOperations.isFull(_address[0][0]);
+		return AllocationPointerOperations.isFull(address);
 	}
 	
 	/**
@@ -188,8 +190,30 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 * @return the address at the specified index
 	 */
 	public final long getAddress(final int index) {
-		return AllocationPointerOperations.getAddress(_address[0][0], index);
+		return AllocationPointerOperations.getAddress(address, index);
 	}
+	
+	/**
+	 * Returns the allocation size at the specified index slot
+	 * @param index the index of the slot to read the allocation size from
+	 * @return the allocation size at the specified index or zero if mem tracking is not enabled
+	 */
+	public final long getAllocationSize(final int index) {
+		if(AllocationPointerOperations.getDimension(address)<2) return 0;
+		return AllocationPointerOperations.getAddress(address, index, AllocationPointerOperations.ONE_BYTE);
+	}
+	
+	/**
+	 * Returns the alignment overhead at the specified index slot
+	 * @param index the index of the slot to read the alignment overhead from
+	 * @return the alignment overhead at the specified index or zero if alignment overhead tracking is not enabled
+	 */
+	public final long getAlignmentOverhead(final int index) {
+		if(AllocationPointerOperations.getDimension(address)<3) return 0;
+		return AllocationPointerOperations.getAddress(address, index, AllocationPointerOperations.TWO_BYTE);
+	}
+	
+
 	
 	
 	
@@ -198,7 +222,7 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 * @return a string describing the status of the AllocationPointer
 	 */
 	public final String toString() {
-		return AllocationPointerOperations.print(_address[0][0]);
+		return AllocationPointerOperations.print(address);
 	}
 	
 	/**
@@ -206,7 +230,7 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 * @return a string outlining the summary and each of the keyAddresses
 	 */
 	public final String dump() {
-		return AllocationPointerOperations.dump(_address[0][0]);
+		return AllocationPointerOperations.dump(address);
 	}
 	
 	
@@ -214,19 +238,8 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 * Frees all memory allocated within this AllocationPointer
 	 */
 	public final void free() {
-		if(_address[0][0]>0) {
-			AllocationPointerOperations.free(_address[0][0]);
-		}
-		if(refId[2]>1) {
-			if(_address[1][0]>0) {
-				AllocationPointerOperations.free(_address[1][0]);
-			}
-			if(refId[2]>2) {
-				if(_address[2][0]>0) {
-					AllocationPointerOperations.free(_address[2][0]);
-				}
-			}			
-		}		
+		AllocationPointerOperations.free(address);
+		
 	}
 	
 	/**
@@ -235,7 +248,7 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 */
 	public final void freeAddress(long addressToFree) {
 		final int index = findIndexForAddress(addressToFree);		
-		if(index==-1) throw new RuntimeException("Address [" + addressToFree + "] not registered for AllocationPointer [" + refId + "]");
+		if(index==-1) throw new RuntimeException("Address [" + addressToFree + "] not registered for AllocationPointer [" + AllocationPointerOperations.getReferenceId(address) + "]");
 		freeIndex(index);		
 	}
 	
@@ -244,11 +257,7 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 * @param index the index of the slot to free
 	 */
 	public final void freeIndex(int index) {
-		final long addressToFree = AllocationPointerOperations.getAddress(_address[0][0], index); 
-		if(addressToFree > 0) {
-			AllocationPointerOperations.freeAddress(addressToFree);
-			reassignSlot(index, 0L, 0L, 0L);
-		}
+		AllocationPointerOperations.clearAddress(address, index);
 	}
 	
 	
@@ -257,14 +266,7 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 * @return the total byte size of this AllocationPointer
 	 */
 	public final long getByteSize() {
-		return AllocationPointerOperations.getEndOffset(_address[0][0]) + 
-			refId[2]>1 ? (
-				AllocationPointerOperations.getEndOffset(_address[1][0]) + 
-					refId[2]>2 ? (
-						AllocationPointerOperations.getEndOffset(_address[2][0])
-					) : 0
-			) : 0
-		; 
+		return AllocationPointerOperations.getDeepByteSize(address);
 	}
 
 	
@@ -276,8 +278,8 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 */
 	public final synchronized PhantomReference<Object> getReference(ReferenceQueue<Object> refQueue) {
 		if(phantomRef==null) {
-			phantomRef = new AllocationPointerPhantomRef(this, _address, refQueue, refId[0]);
-		}
+			phantomRef = new AllocationPointerPhantomRef(this, address, refQueue, AllocationPointerOperations.getReferenceId(address));
+	}
 		return phantomRef;
 	}
 
