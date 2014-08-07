@@ -64,6 +64,15 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 		return address;
 	}
 	
+	/**
+	 * Returns the address of the slot at the passed dimension
+	 * @param dim The dimension to get the address of
+	 * @return the address
+	 */
+	public final long getAddressOfDim(final byte dim) {
+		return AllocationPointerOperations.getAddressOfDim(address, dim);
+	}
+
 	
 	/**
 	 * Returns the dimension of this AllocationPointer where the return value indicates: <ol>

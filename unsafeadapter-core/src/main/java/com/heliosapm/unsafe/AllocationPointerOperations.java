@@ -26,6 +26,7 @@ package com.heliosapm.unsafe;
 
 import java.lang.reflect.Field;
 import java.util.Enumeration;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
 
@@ -120,6 +121,10 @@ public class AllocationPointerOperations {
     
     /** A map of allocation sizes and overhead keyed by address */
     private static final NonBlockingHashMapLong<long[]> allocations;
+    /** A counter of total allocation size */
+    private static final AtomicLong totalAllocated;
+    /** A counter of total alignment overhead */
+    private static final AtomicLong totalOverhead;   
     
 	static {
 		try {
@@ -142,8 +147,15 @@ public class AllocationPointerOperations {
 		ALLOC_SIZE = tmp;
 		ALLOC_MEM_SIZE = ALLOC_SIZE * ADDRESS_SIZE;
 		MANAGED_ALLOC = System.getProperties().containsKey(MANAGED_ALLOC_PROP);
-		allocations = MANAGED_ALLOC ? new NonBlockingHashMapLong<long[]>(1024, true) : null; 
-		
+		if(MANAGED_ALLOC) {
+			totalAllocated = new AtomicLong(0L); 
+			totalOverhead = new AtomicLong(0L);
+			allocations = new NonBlockingHashMapLong<long[]>(1024, true);
+		} else {
+			totalAllocated = null;  
+			totalOverhead = null;
+			allocations = null;
+		}
 	}
     
     
@@ -162,37 +174,97 @@ public class AllocationPointerOperations {
 				dim++;
 			}
 		}
-		long address = unsafe.allocateMemory(dim * ADDRESS_SIZE);
-		unsafe.putAddress(address, unsafe.allocateMemory(ALLOC_SIZE * ADDRESS_SIZE + HEADER_SIZE));
+		long address = _allocateMemory(dim * ADDRESS_SIZE);
+		unsafe.putAddress(address, _allocateMemory(ALLOC_SIZE * ADDRESS_SIZE + HEADER_SIZE));
 		initAllocationPointer(getAddressOfDim(address, ZERO_BYTE), refId, dim);
 		if(dim>1) {
-			unsafe.putAddress(address + ADDRESS_SIZE, unsafe.allocateMemory(ALLOC_SIZE * ADDRESS_SIZE + HEADER_SIZE));
+			unsafe.putAddress(address + ADDRESS_SIZE, _allocateMemory(ALLOC_SIZE * ADDRESS_SIZE + HEADER_SIZE));
 			initAllocationPointer(getAddressOfDim(address, ONE_BYTE), 0L, ZERO_BYTE);
 			if(dim>2) {
-				unsafe.putAddress(address + ADDRESS_SIZE + ADDRESS_SIZE, unsafe.allocateMemory(ALLOC_SIZE * ADDRESS_SIZE + HEADER_SIZE));
+				unsafe.putAddress(address + ADDRESS_SIZE + ADDRESS_SIZE, _allocateMemory(ALLOC_SIZE * ADDRESS_SIZE + HEADER_SIZE));
 				initAllocationPointer(getAddressOfDim(address, TWO_BYTE), 0L, ZERO_BYTE);
 			}
 		}
-		if(MANAGED_ALLOC) allocations.put(address, new long[]{((ALLOC_SIZE * ADDRESS_SIZE + HEADER_SIZE) * dim) + (dim * ADDRESS_SIZE) + ADDRESS_SIZE});
 		return address;
 	}
 	
-	private static final long getAddressOfDim(final long address, final byte dim) {
-		return unsafe.getAddress(address + (dim * ADDRESS_SIZE));
-	}
-
-	private static void resetAllocations() {
-		if(allocations!=null) allocations.clear();
+	/**
+	 * Allocates a memory block and returns the address, recording the allocation size is mem tracking is on
+	 * @param size The size of the memory block to allocate
+	 * @return the address of the allocated memory block
+	 */
+	private static final long _allocateMemory(final long size) {
+		long addr = unsafe.allocateMemory(size);
+		if(MANAGED_ALLOC) {
+			allocations.put(addr, new long[]{size});
+			totalAllocated.addAndGet(size);
+		}
+		return addr;
 	}
 	
+	/**
+	 * Reallocates a memory block and returns the address of the new block, recording the allocation size is mem tracking is on
+	 * @param address The address of the memory block to reallocate 
+	 * @param size The size of the memory block to allocate
+	 * @return the address of the new allocated memory block
+	 */
+	private static final long _reallocateMemory(final long address, final long size) {
+		final long addr = unsafe.reallocateMemory(address, size);
+		if(MANAGED_ALLOC) {
+			allocations.put(addr, new long[]{size});
+			final long[] prior = allocations.remove(address);
+			totalAllocated.addAndGet(size - ((prior!=null && prior.length>0) ? prior[0] : 0));
+		}
+		return addr;
+	}
+	
+	/**
+	 * Frees the memory block allocated at the specified address, recording the allocation size is mem tracking is on
+	 * @param address The address of the memory block to free
+	 */
+	private static final void _freeMemory(final long address) {
+		unsafe.freeMemory(address);
+		if(MANAGED_ALLOC) {
+			final long[] prior = allocations.remove(address);
+			totalAllocated.addAndGet(((prior!=null && prior.length>0) ? 0-prior[0] : 0));
+		}		
+	}
+	
+	/**
+	 * Returns the address of the slot at the passed dimension
+	 * @param rootAddress The root address of the AllocationPointer
+	 * @param dim The dimension to get the address of
+	 * @return the address
+	 */
+	public static final long getAddressOfDim(final long rootAddress, final byte dim) {
+		return unsafe.getAddress(rootAddress + (dim * ADDRESS_SIZE));
+	}
+
+	/**
+	 * Resets the allocation tracking
+	 */
+	@SuppressWarnings("unused")
+	private static void resetAllocations() {
+		if(allocations!=null) allocations.clear();
+		if(totalAllocated!=null) totalAllocated.set(0L);
+		if(totalOverhead!=null) totalOverhead.set(0L);
+	}
+	
+	/**
+	 * Returns a long array with the dimension addresses
+	 * @param address The AllocationPointer root address
+	 * @return an array of addresses, one for each active dimension
+	 */
 	private static long[] getDimAddresses(final long address) {
 		final byte dim = getDimension(address);
 		long[] dimAddresses = new long[dim];
 		switch (dim) {
 			case 3:
 				dimAddresses[TWO_BYTE] = getAddressOfDim(address, TWO_BYTE);
+				//$FALL-THROUGH$
 			case 2:
 				dimAddresses[ONE_BYTE] = getAddressOfDim(address, ONE_BYTE);
+				//$FALL-THROUGH$
 			case 1:
 				dimAddresses[ZERO_BYTE] = getAddressOfDim(address, ZERO_BYTE);
 		}
@@ -395,7 +467,7 @@ public class AllocationPointerOperations {
 	 * @return the index of the most recently assigned address slot
 	 */
 	public static final int getLastIndex(final long address) {
-		final int size = getSize(getAddressOfDim(address, ZERO_BYTE));
+		final int size = getSize(address);
 		return size<1 ? -1 : size-1;
 	}
 	
@@ -568,10 +640,7 @@ public class AllocationPointerOperations {
 	 * @param address the address of the memory block to free
 	 */
 	public static final void freeAddress(long address) {
-		unsafe.freeMemory(address);
-		if(MANAGED_ALLOC) {
-			allocations.remove(address);
-		}
+		_freeMemory(address);
 	}
 	
 	/**
@@ -580,11 +649,12 @@ public class AllocationPointerOperations {
 	 */
 	public static final long getTotalAllocatedMemory() {
 		if(!MANAGED_ALLOC) return -1;
-		long total = 0;
-		for(Enumeration<long[]> e = allocations.elements(); e.hasMoreElements();) {
-			total += e.nextElement()[0];
-		}
-		return total;
+//		long total = 0;
+//		for(Enumeration<long[]> e = allocations.elements(); e.hasMoreElements();) {
+//			total += e.nextElement()[0];
+//		}
+//		return total;
+		return totalAllocated.get();
 	}
 	
 	/**
@@ -686,7 +756,7 @@ public class AllocationPointerOperations {
 	 * @return The [possibly empty] array of addresses just deallocated
 	 */
 	public static final long[][] free(final long address, final boolean includePostMortem) {
-		log("Starting full AP Free");
+		log("Starting full AP Free for root address [%s]", address);
 		final byte dim = getDimension(address);				
 		final int size = getSize(address);
 		long[][] deadAddresses = includePostMortem ? size>0 ? new long[size][dim] : EMPTY_DLONG_ARR : EMPTY_DLONG_ARR;
@@ -696,26 +766,22 @@ public class AllocationPointerOperations {
 					long[] triplet = getSizedTriplet(address, i);
 					deadAddresses[i] = triplet;
 					if(triplet[0]>0) {
-						unsafe.freeMemory(triplet[0]);
-						if(MANAGED_ALLOC) allocations.remove(triplet[0]);
+						_freeMemory(triplet[0]);						
 					}
 				}				
 			} else {
 				for(int i = 0; i < size; i++) {
 					long addr = getAddress(address, i);
 					if(addr>0) {
-						unsafe.freeMemory(addr);
-						if(MANAGED_ALLOC) allocations.remove(addr);
+						_freeMemory(addr);
 					}
 				}
 			}
 		}
 		for(final long dimAddress : getDimAddresses(address)) {
-			unsafe.freeMemory(dimAddress);
-			//if(MANAGED_ALLOC) allocations.remove(dimAddress);
+			_freeMemory(dimAddress);
 		}
-		unsafe.freeMemory(address);
-		if(MANAGED_ALLOC) allocations.remove(address);
+		_freeMemory(address);
 		return deadAddresses;
 	}
 	
@@ -765,7 +831,8 @@ public class AllocationPointerOperations {
 	 */
 	public static final long getEndAddress(final long address) {
 		final int size = getCapacity(address);
-		return address + HEADER_SIZE + (size * ADDRESS_SIZE);
+		final long za = getAddressOfDim(address, ZERO_BYTE);
+		return za + HEADER_SIZE + (size * ADDRESS_SIZE);
 	}
 	
 	/**
@@ -789,7 +856,13 @@ public class AllocationPointerOperations {
 	public static final long getDeepByteSize(long address) {
 		final byte dim = getDimension(address);
 		final int cap = getCapacity(address);
-		return (HEADER_SIZE * dim) + (ADDRESS_SIZE * cap * dim) + ADDRESS_SIZE;
+		return 
+				(
+						(HEADER_SIZE + (ADDRESS_SIZE * cap))	  // the size of one dim
+						 * dim									  // multiplied by the number of dims
+						 + (ADDRESS_SIZE * dim)                   // plus the dim addresses
+				);
+				
 	}
 	
 	
@@ -826,11 +899,7 @@ public class AllocationPointerOperations {
 	}
 	
 	private static void extend(final long rootAddress, final long actualAddress, final long endOffset, final int currentCap, final byte dim) {
-		final long newAddress = unsafe.reallocateMemory(actualAddress, endOffset + ALLOC_MEM_SIZE);
-		if(MANAGED_ALLOC) {
-			allocations.remove(actualAddress);
-			allocations.put(newAddress, new long[]{endOffset + ALLOC_MEM_SIZE});
-		}
+		final long newAddress = _reallocateMemory(actualAddress, endOffset + ALLOC_MEM_SIZE);
 		unsafe.setMemory(newAddress + endOffset, ALLOC_MEM_SIZE, ZERO_BYTE);
 		unsafe.putInt(newAddress, currentCap + ALLOC_SIZE);
 		setAddressOfDim(rootAddress, dim, newAddress);
@@ -878,6 +947,8 @@ public class AllocationPointerOperations {
 		if(MANAGED_ALLOC) return;
 		ReflectionHelper.setFieldValue(AllocationPointerOperations.class, "MANAGED_ALLOC", true);
 		ReflectionHelper.setFieldValue(AllocationPointerOperations.class, "allocations", new NonBlockingHashMapLong<long[]>(1024, true));
+		ReflectionHelper.setFieldValue(AllocationPointerOperations.class, "totalAllocated", new AtomicLong(0));
+		ReflectionHelper.setFieldValue(AllocationPointerOperations.class, "totalOverhead", new AtomicLong(0));
 	}
 	
 	/**
@@ -890,6 +961,9 @@ public class AllocationPointerOperations {
 		ReflectionHelper.setFieldValue(AllocationPointerOperations.class, "MANAGED_ALLOC", false);
 		if(allocations!=null) allocations.clear();
 		ReflectionHelper.setFieldValue(AllocationPointerOperations.class, "allocations", null);
+		ReflectionHelper.setFieldValue(AllocationPointerOperations.class, "totalAllocated", null);
+		ReflectionHelper.setFieldValue(AllocationPointerOperations.class, "totalOverhead", null);
+
 	}
 	
 	

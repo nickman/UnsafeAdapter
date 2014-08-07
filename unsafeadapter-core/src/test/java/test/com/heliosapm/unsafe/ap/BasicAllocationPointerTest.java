@@ -24,6 +24,7 @@
  */
 package test.com.heliosapm.unsafe.ap;
 
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.Assert;
@@ -46,7 +47,7 @@ import com.heliosapm.unsafe.UnsafeAdapter;
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>test.com.heliosapm.unsafe.ap.BasicAllocationPointerTest</code></p>
  */
-
+@SuppressWarnings("restriction")
 public class BasicAllocationPointerTest extends BaseTest {
 
 	
@@ -120,16 +121,21 @@ public class BasicAllocationPointerTest extends BaseTest {
 			int expectedSize = AllocationPointerOperations.HEADER_SIZE + (AllocationPointerOperations.ADDRESS_SIZE * AllocationPointerOperations.ALLOC_SIZE); 
 			
 			
-//			Assert.assertEquals("AllocationPointer Local Byte Size", expectedSize, AllocationPointerOperations.getEndOffset(rootAddress));
-//			long expectedDeepSize = expectedSize * dim;
-			// return (HEADER_SIZE * dim) + (ADDRESS_SIZE * size * dim) + ADDRESS_SIZE;
-			long expectedDeepSize =  
-					(AllocationPointerOperations.HEADER_SIZE * dim) +	// the header size X the number of headers 
-					(AllocationPointerOperations.ADDRESS_SIZE * AllocationPointerOperations.ALLOC_SIZE * dim) +  // the size of an address X the number of allocated slots X the number of slot arrays allocated 
-					AllocationPointerOperations.ADDRESS_SIZE;		// the root address size
+			Assert.assertEquals("AllocationPointer Local Byte Size", expectedSize, AllocationPointerOperations.getEndOffset(rootAddress));
+			long expectedDeepSize = (dim * expectedSize) + (dim * AllocationPointerOperations.ADDRESS_SIZE);
+					
+					
+					
+//					(AllocationPointerOperations.HEADER_SIZE * dim) +	// the header size X the number of headers 
+//					(AllocationPointerOperations.ADDRESS_SIZE * AllocationPointerOperations.ALLOC_SIZE * dim) +  // the size of an address X the number of allocated slots X the number of slot arrays allocated 
+//					//AllocationPointerOperations.ADDRESS_SIZE;		// the root address size
+//					(AllocationPointerOperations.ADDRESS_SIZE * dim);
+			
+			log("Byte Size Estimates:\n\tOne Dim Expected: %s\n\tOne Dim API: %s\n\tExpected DBS: %s\n\tAPI DBS:%s\n\tManaged: %s\n", expectedSize, AllocationPointerOperations.getEndOffset(rootAddress), expectedDeepSize, AllocationPointerOperations.getDeepByteSize(rootAddress), AllocationPointerOperations.getTotalAllocatedMemory());
+			
 			
 			Assert.assertEquals("AllocationPointer Deep Byte Size", expectedDeepSize, AllocationPointerOperations.getDeepByteSize(rootAddress));
-			validateAPAllocated(expectedDeepSize, dim);
+			validateAPAllocated(expectedDeepSize, dim + 1);
 		} finally {
 			ap.free();
 			validateAPAllocated(0, 0);
@@ -138,17 +144,18 @@ public class BasicAllocationPointerTest extends BaseTest {
 	
 	/**
 	 * Tests AllocationPointer set address and clear
-	 */
+	 */	
 	@Test
 	public void testAllocationWriteRead() {
 		AllocationPointer ap = refMgr.newAllocationPointer();
+		long[] managedAddresses = new long[AllocationPointerOperations.ALLOC_SIZE];
 		try {
 			Assert.assertEquals("AllocationPointer Capacity", AllocationPointerOperations.ALLOC_SIZE, ap.getCapacity());
 			Assert.assertEquals("AllocationPointer Size", 0, ap.getSize());
-			long[][] testData = new long[AllocationPointerOperations.ALLOC_SIZE][3];
-			long baseAddr = nextPosLong();
+			long[][] testData = new long[AllocationPointerOperations.ALLOC_SIZE][3];			
 			for(int outer = 0; outer < AllocationPointerOperations.ALLOC_SIZE; outer++) {
-				testData[outer][0] = baseAddr++;
+				testData[outer][0] = testUnsafe.allocateMemory(1);
+				managedAddresses[outer] = testData[outer][0]; 
 				for(int inner = 1; inner < 3; inner++) {
 					testData[outer][inner] = nextPosInt();
 				}
@@ -157,8 +164,16 @@ public class BasicAllocationPointerTest extends BaseTest {
 			}
 			for(int outer = 0; outer < AllocationPointerOperations.ALLOC_SIZE; outer++) {
 				Assert.assertEquals("Address at index " + outer, testData[outer][0] , ap.getAddress(outer));
+				if(AllocationPointerOperations.MANAGED_ALLOC) {
+					Assert.assertEquals("Size at index " + outer, testData[outer][1],  ap.getAllocationSize(outer));
+//					Assert.assertEquals("Overhead at index " + outer, testData[outer][2], ap.getAlignmentOverhead(outer));
+				} else {
+					Assert.assertEquals("Size at index " + outer, 0,  ap.getAllocationSize(outer));
+//					Assert.assertEquals("Overhead at index " + outer, 0, ap.getAlignmentOverhead(outer));					
+				}
 			}
 		} finally {
+			log("Will free Managed Addresses %s", Arrays.toString(managedAddresses));
 			ap.free();
 			validateAPAllocated(0, 0);
 		}
