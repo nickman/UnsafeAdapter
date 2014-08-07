@@ -47,12 +47,34 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	// =====================================
 	
 	/**
-	 * Returns the address base for this AllocationPointer.
+	 * Returns the managed addresses for this AllocationPointer.
 	 * <b>USE CAREFULLY</b> 
-	 * @return the address base for this AllocationPointer.
+	 * @return the managed addresses for this AllocationPointer.
 	 */
-	public final long[] getAddressBase() {
+	public final long[] getManagedAddresses() {
 		return AllocationPointerOperations.getAddressBase(address);
+	}
+	
+	/**
+	 * Returns the root address base for this AllocationPointer.
+	 * <b>USE CAREFULLY</b> 
+	 * @return the root address base for this AllocationPointer.
+	 */
+	public final long getAddressBase() {
+		return address;
+	}
+	
+	
+	/**
+	 * Returns the dimension of this AllocationPointer where the return value indicates: <ol>
+	 * 	<li>Managed addresses only</li>
+	 *  <li>Managed addresses and the allocation size of each address</li>
+	 *  <li>Managed addresses and the allocation size and cache-line alignment overhead of each address</li>
+	 * </ol>
+	 * @return the dimension of this AllocationPointer
+	 */
+	public final byte getDimension() {
+		return AllocationPointerOperations.getDimension(address);
 	}
 	
 	/**
@@ -278,7 +300,7 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 */
 	public final synchronized PhantomReference<Object> getReference(ReferenceQueue<Object> refQueue) {
 		if(phantomRef==null) {
-			phantomRef = new AllocationPointerPhantomRef(this, address, refQueue, AllocationPointerOperations.getReferenceId(address));
+			phantomRef = new AllocationPointerPhantomRef(this, address, refQueue);
 	}
 		return phantomRef;
 	}

@@ -26,6 +26,8 @@ package com.heliosapm.unsafe;
 
 import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
+import java.util.Arrays;
+import java.util.Comparator;
 
 /**
  * <p>Title: AllocationPointerPhantomRef</p>
@@ -36,10 +38,7 @@ import java.lang.ref.ReferenceQueue;
  */
 class AllocationPointerPhantomRef extends PhantomReference<Object> implements AllocationTracker {
 	/** The address that the referenced AllocationPointer pointed to */
-	private final long address;
-	
-	/** The UnsafeAdapter provided reference id */
-	private final long refId;
+	private long address;
 
 	
 	/** 
@@ -64,12 +63,10 @@ class AllocationPointerPhantomRef extends PhantomReference<Object> implements Al
 	 * @param referent The AllocationPointer to be referenced
 	 * @param address The actual reference to the {@link AllocationPointer}'s address long array.
 	 * @param refQueue The reference queue to register with
-	 * @param refId The UnsafeAdapter provided reference id
 	 */
-	AllocationPointerPhantomRef(AllocationPointer referent, long[][] address, ReferenceQueue<Object> refQueue, long refId) {
+	AllocationPointerPhantomRef(AllocationPointer referent, long address, ReferenceQueue<Object> refQueue) {
 		super(referent, refQueue);
-		this.address = address;
-		this.refId = refId;
+		this.address = address;		
 	}
 	
 	/**
@@ -77,7 +74,7 @@ class AllocationPointerPhantomRef extends PhantomReference<Object> implements Al
 	 * @return the UnsafeAdapter provided reference id
 	 */
 	public long getRefId() {
-		return refId;
+		return AllocationPointerOperations.getReferenceId(address);
 	}
 	
 	/**
@@ -94,47 +91,102 @@ class AllocationPointerPhantomRef extends PhantomReference<Object> implements Al
 	 * @see java.lang.ref.Reference#clear()
 	 */
 	public void clear() {
-		if(address[0][0] > 0) {
-			clearedAddresses = AllocationPointerOperations.free(address[0], true);
-			address[0][0] = 0;
+		if(address > 0) {
+			clearedAddresses = AllocationPointerOperations.free(address, true);
+			Arrays.sort(clearedAddresses, CSORT);
+			address = 0;
 		} else {
 			clearedAddresses = AllocationPointerOperations.EMPTY_DLONG_ARR;
 		}
 		super.clear();
 	}
 	
+	/** A long arr arr sorter */
+	public static final ClearedComparable CSORT = new ClearedComparable(); 
 	
-	// ////////////////////////////////////////////////////////////////
-	//  TODO:  These ops must be implemented in Ops.
-	// ////////////////////////////////////////////////////////////////
+	/**
+	 * <p>Title: ClearedComparable</p>
+	 * <p>Description: Sorts the cleared array by the address (long[<index>][0])</p> 
+	 * <p>Company: Helios Development Group LLC</p>
+	 * @author Whitehead (nwhitehead AT heliosdev DOT org)
+	 * <p><code>com.heliosapm.unsafe.AllocationPointerPhantomRef.ClearedComparable</code></p>
+	 */
+	public static class ClearedComparable implements Comparator<long[]> {
+		@Override
+		public int compare(long[] a, long[] b) {
+			if(a[0]==b[0]) return 0;
+			return a[0] < b[0] ? -1 : 1;
+		}
+	}
+	
+	public static void main(String[] args) {
+		long[][] arr = new long[][]{
+				{7,8,9},
+				{1,2,3},
+				{4,5,6}
+		};
+		System.out.println(Arrays.deepToString(arr));
+		Arrays.sort(arr, new ClearedComparable());
+		System.out.println(Arrays.deepToString(arr));
+		int index = Arrays.binarySearch(arr, new long[] {7}, CSORT);
+		System.out.println("Index of 7:" + index);
+	}
+	
+	
+	// ////////////////////////////////////////////////////////////////////////////////
+	//  TODO:  These ops must be implemented in AllocationPointerOperations.
+	// ////////////////////////////////////////////////////////////////////////////////
 
 	/**
 	 * {@inheritDoc}
 	 * @see com.heliosapm.unsafe.AllocationTracker#add(long, long, long)
 	 */
 	@Override
-	public void add(long newAddress, long allocationSize, long alignmentOverhead) {
-		AllocationPointerOperations.assignSlot(address[0], newAddress, allocationSize, alignmentOverhead);		
+	public void add(final long newAddress, final long allocationSize, final long alignmentOverhead) {
+		AllocationPointerOperations.assignSlot(address, newAddress, allocationSize, alignmentOverhead);		
 	}
-
+	
 	/**
 	 * {@inheritDoc}
 	 * @see com.heliosapm.unsafe.AllocationTracker#getAllocationSize(long)
 	 */
 	@Override
-	public long getAllocationSize(long address) {
-		// TODO Auto-generated method stub
+	public long getAllocationSize(final long trackedAddress) {
+		if(address!=0) return AllocationPointerOperations.getAllocationSizeOf(address, trackedAddress);
+		if(clearedAddresses==null || clearedAddresses.length==0 || clearedAddresses[0].length <2) return 0;
+		final int index = Arrays.binarySearch(clearedAddresses, new long[] {trackedAddress}, CSORT); 
+		if(index < 0) return 0;		
+		return clearedAddresses[index][2];
+	}
+
+	/**
+	 * Returns the total allocation size in bytes for the addresses tracked
+	 * @return the total allocation size in bytes for the addresses tracked
+	 */
+	public long getTotalAllocationSize() {
+		if(address!=0) return AllocationPointerOperations.getTotalTrackedAllocationBytes(address);
+		if(clearedAddresses!=null) {
+			if(clearedAddresses.length==0 || clearedAddresses[0].length <2) return 0;
+			long total = 0;
+			for(int i = 0; i < clearedAddresses.length; i++) {
+				total += clearedAddresses[i][1];
+			}
+			return total;
+		}
 		return 0;
 	}
 
 	/**
-	 * {@inheritDoc}
+	 * {@inheritDoc}trackedAddress
 	 * @see com.heliosapm.unsafe.AllocationTracker#getAlignmentOverhead(long)
 	 */
 	@Override
-	public long getAlignmentOverhead(long address) {
-		// TODO Auto-generated method stub
-		return 0;
+	public long getAlignmentOverhead(long trackedAddress) {
+		if(address!=0) return AllocationPointerOperations.getAllocationSizeOf(address, trackedAddress);
+		if(clearedAddresses==null || clearedAddresses.length==0 || clearedAddresses[0].length <3) return 0;
+		final int index = Arrays.binarySearch(clearedAddresses, new long[] {trackedAddress}, CSORT); 
+		if(index < 0) return 0;		
+		return clearedAddresses[index][3];
 	}
 
 	/**
@@ -142,9 +194,8 @@ class AllocationPointerPhantomRef extends PhantomReference<Object> implements Al
 	 * @see com.heliosapm.unsafe.AllocationTracker#clearAddress(long)
 	 */
 	@Override
-	public void clearAddress(long address) {
-		// TODO Auto-generated method stub
-		
+	public void clearAddress(long addressToClear) {
+		AllocationPointerOperations.clearAddress(address, AllocationPointerOperations.findIndexForAddress(address, addressToClear));
 	}
 
 }

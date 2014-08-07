@@ -44,14 +44,14 @@ public interface AllocationTracker {
 	/**
 	 * Returns the allocation size of the memory block at the given address
 	 * @param address The address of the allocation
-	 * @return the allocation size
+	 * @return the allocation size or zero if the address is not tracked by this tracker
 	 */
 	public long getAllocationSize(long address);
 	
 	/**
 	 * Returns the alignment overhead of the memory block at the given address
 	 * @param address The address of the allocation
-	 * @return the alignment overhead
+	 * @return the alignment overhead or zero if the address is not tracked by this tracker
 	 */
 	public long getAlignmentOverhead(long address);
 	

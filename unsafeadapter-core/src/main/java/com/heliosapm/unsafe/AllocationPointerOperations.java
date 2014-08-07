@@ -173,16 +173,30 @@ public class AllocationPointerOperations {
 				initAllocationPointer(getAddressOfDim(address, TWO_BYTE), 0L, ZERO_BYTE);
 			}
 		}
-		if(MANAGED_ALLOC) allocations.put(address, new long[]{((ALLOC_SIZE * ADDRESS_SIZE + HEADER_SIZE) * dim) + (dim * ADDRESS_SIZE)});
+		if(MANAGED_ALLOC) allocations.put(address, new long[]{((ALLOC_SIZE * ADDRESS_SIZE + HEADER_SIZE) * dim) + (dim * ADDRESS_SIZE) + ADDRESS_SIZE});
 		return address;
 	}
 	
 	private static final long getAddressOfDim(final long address, final byte dim) {
 		return unsafe.getAddress(address + (dim * ADDRESS_SIZE));
 	}
+
+	private static void resetAllocations() {
+		if(allocations!=null) allocations.clear();
+	}
 	
-	private static final long getAddressOfDim(final long address) {
-		return unsafe.getAddress(address);
+	private static long[] getDimAddresses(final long address) {
+		final byte dim = getDimension(address);
+		long[] dimAddresses = new long[dim];
+		switch (dim) {
+			case 3:
+				dimAddresses[TWO_BYTE] = getAddressOfDim(address, TWO_BYTE);
+			case 2:
+				dimAddresses[ONE_BYTE] = getAddressOfDim(address, ONE_BYTE);
+			case 1:
+				dimAddresses[ZERO_BYTE] = getAddressOfDim(address, ZERO_BYTE);
+		}
+		return dimAddresses;
 	}
 	
 	
@@ -220,7 +234,7 @@ public class AllocationPointerOperations {
 	 * @return the dimension of the AllocationPointer
 	 */
 	public static final byte getDimension(final long address) {
-		return unsafe.getByte(getAddressOfDim(address) + DIM_OFFSET);
+		return unsafe.getByte(getAddressOfDim(address, ZERO_BYTE) + DIM_OFFSET);
 	}
 	/**
 	 * Returns the reference id of the referenced AllocationPointer
@@ -228,7 +242,7 @@ public class AllocationPointerOperations {
 	 * @return the reference id of the AllocationPointer
 	 */
 	public static final long getReferenceId(final long address) {
-		return unsafe.getLong(getAddressOfDim(address) + REFID_OFFSET);
+		return unsafe.getLong(getAddressOfDim(address, ZERO_BYTE) + REFID_OFFSET);
 	}
 	
 //	/**
@@ -253,7 +267,7 @@ public class AllocationPointerOperations {
 	 * TODO: implement hashing function here to speed up finding an address
 	 */
 	public static final int findIndexForAddress(final long address, final long addressToFind) {
-		final long za = getAddressOfDim(address);
+		final long za = getAddressOfDim(address, ZERO_BYTE);
 		final int sz = getSize(za);
 		
 		long indexedValue = -1;
@@ -362,7 +376,7 @@ public class AllocationPointerOperations {
 	 * @return the number of populated slots
 	 */
 	public static final int getSize(final long address) {
-		return unsafe.getInt(getAddressOfDim(address) + SIZE_OFFSET);
+		return unsafe.getInt(getAddressOfDim(address, ZERO_BYTE) + SIZE_OFFSET);
 	}
 	
 	/**
@@ -372,7 +386,7 @@ public class AllocationPointerOperations {
 	 * @return the number of allocated slots
 	 */
 	public static final int getCapacity(final long address) {
-		return unsafe.getInt(getAddressOfDim(address));
+		return unsafe.getInt(getAddressOfDim(address, ZERO_BYTE));
 	}
 	
 	/**
@@ -381,7 +395,7 @@ public class AllocationPointerOperations {
 	 * @return the index of the most recently assigned address slot
 	 */
 	public static final int getLastIndex(final long address) {
-		final int size = getSize(getAddressOfDim(address));
+		final int size = getSize(getAddressOfDim(address, ZERO_BYTE));
 		return size<1 ? -1 : size-1;
 	}
 	
@@ -419,6 +433,61 @@ public class AllocationPointerOperations {
 		return getAddress(address, index, ZERO_BYTE);
 	}
 
+	/**
+	 * Retrieves the total number of bytes allocated on behalf of the addresses being tracked 
+	 * @param address The root address of the AllocationPointer
+	 * @return the total number of bytes allocated or zero if mem tracking is not enabled 
+	 */
+	public static final long getTotalTrackedAllocationBytes(final long address) {
+		if(getDimension(address)<2) return 0; 
+		long size = 0;
+		final int sz = getSize(address);
+		for(int i = 0; i < sz; i++) {
+			size += getAddress(address, i, ONE_BYTE);
+		}
+		return size;
+	}
+	
+	/**
+	 * Retrieves the total number of bytes of cache-line memory alignment bytes overhead on behalf of the addresses being tracked 
+	 * @param rootAddress The root address of the AllocationPointer
+	 * @return the total number of cache-line memory alignment bytes overhead 
+	 */
+	public static final long getTotalAlignmentOverheadSize(final long rootAddress) {
+		if(getDimension(rootAddress)<3) return 0; 
+		long size = 0;
+		final int sz = getSize(rootAddress);
+		for(int i = 0; i < sz; i++) {
+			size += getAddress(rootAddress, i, TWO_BYTE);
+		}
+		return size;
+	}
+	
+	/**
+	 * Returns the size of the memory block in bytes at the specified tracked address
+	 * @param rootAddress The root address of the AllocationPointer
+	 * @param trackedAddress The address to get the allocation size for
+	 * @return the size of the memory block referenced 
+	 */
+	public static long getAllocationSizeOf(final long rootAddress, final long trackedAddress) {
+		if(getDimension(rootAddress)<2) return 0; 
+		final int index = findIndexForAddress(rootAddress, trackedAddress);
+		if(index==-1) return 0;
+		return getAddress(rootAddress, index, ZERO_BYTE);
+	}
+	
+	/**
+	 * Returns the cache-line alignment overhead of the memory block in bytes at the specified tracked address
+	 * @param rootAddress The root address of the AllocationPointer
+	 * @param trackedAddress The address to get the cache-line alignment overhead for
+	 * @return the cache-line alignment overhead of the memory block referenced 
+	 */
+	public static long getAlignmentOverheadOf(final long rootAddress, final long trackedAddress) {
+		if(getDimension(rootAddress)<2) return 0; 
+		final int index = findIndexForAddress(rootAddress, trackedAddress);
+		if(index==-1) return 0;
+		return getAddress(rootAddress, index, TWO_BYTE);
+	}
 	
 	/**
 	 * Returns a long array containing the address, allocation size and alignment overhead 
@@ -617,6 +686,7 @@ public class AllocationPointerOperations {
 	 * @return The [possibly empty] array of addresses just deallocated
 	 */
 	public static final long[][] free(final long address, final boolean includePostMortem) {
+		log("Starting full AP Free");
 		final byte dim = getDimension(address);				
 		final int size = getSize(address);
 		long[][] deadAddresses = includePostMortem ? size>0 ? new long[size][dim] : EMPTY_DLONG_ARR : EMPTY_DLONG_ARR;
@@ -640,22 +710,31 @@ public class AllocationPointerOperations {
 				}
 			}
 		}
-		
-		unsafe.freeMemory(getAddressOfDim(ZERO_BYTE));
-		if(MANAGED_ALLOC) allocations.remove(getAddressOfDim(ZERO_BYTE));
-		if(dim>1) {
-			unsafe.freeMemory(getAddressOfDim(ONE_BYTE));
-			if(MANAGED_ALLOC) allocations.remove(getAddressOfDim(ONE_BYTE));
-			if(dim>2) {
-				unsafe.freeMemory(getAddressOfDim(TWO_BYTE));
-				if(MANAGED_ALLOC) allocations.remove(getAddressOfDim(TWO_BYTE));
-			}
-		}		
+		for(final long dimAddress : getDimAddresses(address)) {
+			unsafe.freeMemory(dimAddress);
+			//if(MANAGED_ALLOC) allocations.remove(dimAddress);
+		}
 		unsafe.freeMemory(address);
 		if(MANAGED_ALLOC) allocations.remove(address);
 		return deadAddresses;
 	}
 	
+	/**
+	 * Dumps the values of the AllocationPointer
+	 * @param rootAddress The root address of the AllocationPointer
+	 * @return a one, two or three length long array within an array keyed by by index.
+	 */
+	public static final long[][] dumpValues(final long rootAddress) {
+		final byte dim = getDimension(rootAddress);				
+		final int size = getSize(rootAddress);
+		long[][] matrix  = new long[size][dim];
+		if(size>0) {
+			for(int i = 0; i < size; i++) {
+				matrix[i] = getSizedTriplet(rootAddress, i);
+			}			
+		}
+		return matrix;
+	}
 	
 	/**
 	 * Increments the size of the AllocationPointer to represent an added address.
@@ -680,7 +759,7 @@ public class AllocationPointerOperations {
 	}
 	
 	/**
-	 * Returns the address of the last byte of the referenced AllocationPointerOperations
+	 * Returns the address of the last byte of the referenced AllocationPointer
 	 * @param address The address of the allocation pointer memory block
 	 * @return the end address of the AllocationPointerOperations
 	 */
@@ -695,7 +774,7 @@ public class AllocationPointerOperations {
 	 * @return the total byte size of the AllocationPointer
 	 */
 	public static final long getEndOffset(final long address) {
-		return getEndAddress(address) - getAddressOfDim(address);
+		return getEndAddress(address) - getAddressOfDim(address, ZERO_BYTE);
 	}
 	
 	/**
@@ -709,7 +788,8 @@ public class AllocationPointerOperations {
 	 */
 	public static final long getDeepByteSize(long address) {
 		final byte dim = getDimension(address);
-		return getEndOffset(address) * dim;
+		final int cap = getCapacity(address);
+		return (HEADER_SIZE * dim) + (ADDRESS_SIZE * cap * dim) + ADDRESS_SIZE;
 	}
 	
 	
@@ -733,14 +813,14 @@ public class AllocationPointerOperations {
 	}
 	
 	/**
-	 * Returns the address base
+	 * Returns the managed addresses
 	 * @param address The root address of the AllocationPointer
 	 * @return an array of longs
 	 */
 	public static final long[] getAddressBase(final long address) {
-		final byte dim = getDimension(address);
-		long[] addrs = new long[dim];
-		unsafe.copyMemory(address, getAddressOf(addrs) + LONG_ARRAY_OFFSET, dim * LONG_SIZE);
+		final int size = getSize(address);
+		long[] addrs = new long[size];
+		unsafe.copyMemory(address, getAddressOf(addrs) + LONG_ARRAY_OFFSET, size * LONG_SIZE);
 		return addrs;
 		
 	}

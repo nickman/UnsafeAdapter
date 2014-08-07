@@ -24,7 +24,10 @@
  */
 package test.com.heliosapm.unsafe.ap;
 
-import org.junit.Assert;
+import org.junit.Before;
+
+import com.heliosapm.unsafe.AllocationPointerOperations;
+import com.heliosapm.unsafe.ReflectionHelper;
 
 import test.com.heliosapm.unsafe.UnsafeAdapterConfiguration;
 
@@ -43,6 +46,14 @@ public class MemTrackingAllocationPointerTest extends BasicAllocationPointerTest
 	 */
 	public MemTrackingAllocationPointerTest() {
 		super();
+	}
+	
+	/**
+	 * Resets the allocation tracking before each test
+	 */
+	@Before
+	public void clearAllocations() {
+		ReflectionHelper.invoke(AllocationPointerOperations.class, "resetAllocations");
 	}
 
 }

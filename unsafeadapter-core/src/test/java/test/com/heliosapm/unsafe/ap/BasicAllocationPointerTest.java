@@ -103,22 +103,32 @@ public class BasicAllocationPointerTest extends BaseTest {
 	public void testBasicAllocationSize() {
 		AllocationPointer ap = refMgr.newAllocationPointer();
 		try {
-			long[] addressBase = ap.getAddressBase();
-			Assert.assertEquals("Address Base Length", baseAddrLength, addressBase.length);
-			byte dim = AllocationPointerOperations.getDimension(addressBase[0]);
-			Assert.assertEquals("AllocationPointer Dimension", baseAddrLength, dim);
-			int capacity = AllocationPointerOperations.getCapacity(addressBase[0]);
-			int size = AllocationPointerOperations.getSize(addressBase[0]);
+			final long rootAddress = ap.getAddressBase();
+			final byte dim = ap.getDimension();			
+			log("Root Address: [%s], Deep Byte Size: [%s], Dimension: [%s]", rootAddress, AllocationPointerOperations.getDeepByteSize(rootAddress), dim);
+			Assert.assertEquals("AllocationPointer Dimension", getBaseAddressExpectedLength(), dim);
+			int capacity = AllocationPointerOperations.getCapacity(rootAddress);
+			int size = AllocationPointerOperations.getSize(rootAddress);
 			Assert.assertEquals("AllocationPointer Capacity", AllocationPointerOperations.ALLOC_SIZE, capacity);
 			Assert.assertEquals("AllocationPointer Size", 0, size);
 			capacity = ap.getCapacity();
 			size = ap.getSize();
 			Assert.assertEquals("AllocationPointer Capacity", AllocationPointerOperations.ALLOC_SIZE, capacity);
 			Assert.assertEquals("AllocationPointer Size", 0, size);
-			int expectedSize = AllocationPointerOperations.HEADER_SIZE + (AllocationPointerOperations.ADDRESS_SIZE * AllocationPointerOperations.ALLOC_SIZE);			
-			Assert.assertEquals("AllocationPointer Local Byte Size", expectedSize, AllocationPointerOperations.getEndOffset(addressBase[0]));
-			long expectedDeepSize = expectedSize * dim;			
-			Assert.assertEquals("AllocationPointer Deep Byte Size", expectedDeepSize, AllocationPointerOperations.getDeepByteSize(addressBase));
+			
+			
+			int expectedSize = AllocationPointerOperations.HEADER_SIZE + (AllocationPointerOperations.ADDRESS_SIZE * AllocationPointerOperations.ALLOC_SIZE); 
+			
+			
+//			Assert.assertEquals("AllocationPointer Local Byte Size", expectedSize, AllocationPointerOperations.getEndOffset(rootAddress));
+//			long expectedDeepSize = expectedSize * dim;
+			// return (HEADER_SIZE * dim) + (ADDRESS_SIZE * size * dim) + ADDRESS_SIZE;
+			long expectedDeepSize =  
+					(AllocationPointerOperations.HEADER_SIZE * dim) +	// the header size X the number of headers 
+					(AllocationPointerOperations.ADDRESS_SIZE * AllocationPointerOperations.ALLOC_SIZE * dim) +  // the size of an address X the number of allocated slots X the number of slot arrays allocated 
+					AllocationPointerOperations.ADDRESS_SIZE;		// the root address size
+			
+			Assert.assertEquals("AllocationPointer Deep Byte Size", expectedDeepSize, AllocationPointerOperations.getDeepByteSize(rootAddress));
 			validateAPAllocated(expectedDeepSize, dim);
 		} finally {
 			ap.free();
