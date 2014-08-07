@@ -24,7 +24,6 @@
  */
 package test.com.heliosapm.unsafe.ap;
 
-import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.Assert;
@@ -37,7 +36,6 @@ import test.com.heliosapm.unsafe.UnsafeAdapterConfigurator;
 
 import com.heliosapm.unsafe.AllocationPointer;
 import com.heliosapm.unsafe.AllocationPointerOperations;
-import com.heliosapm.unsafe.AllocationReferenceManager;
 import com.heliosapm.unsafe.UnsafeAdapter;
 
 /**
@@ -46,8 +44,10 @@ import com.heliosapm.unsafe.UnsafeAdapter;
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>test.com.heliosapm.unsafe.ap.BasicAllocationPointerTest</code></p>
+ * TODO: test reassign slot
  */
 @SuppressWarnings("restriction")
+@UnsafeAdapterConfiguration(apAllocSize=3)  // Don't change this unless you know what you're doing  
 public class BasicAllocationPointerTest extends BaseTest {
 
 	
@@ -57,12 +57,11 @@ public class BasicAllocationPointerTest extends BaseTest {
 	protected boolean AL_TRACKING = false;
 	/** The expected length of the AllocationPointer base address based on the config */
 	protected int baseAddrLength = -1;
-	/** Provides instances of AllocationPointers */
-	protected AllocationReferenceManager refMgr = null;
+//	/** Provides instances of AllocationPointers */
+//	protected AllocationReferenceManager refMgr = null;
 	
 	/** Indicates if this instance has been initialized */
 	protected final AtomicBoolean inited = new AtomicBoolean(false);
-	
 	
 	/**
 	 * Initializes the config and creates a new AllocationReferenceManager in accordance.
@@ -73,7 +72,7 @@ public class BasicAllocationPointerTest extends BaseTest {
 			MEM_TRACKING = UnsafeAdapter.isMemTrackingEnabled();
 			AL_TRACKING = UnsafeAdapter.isAlignmentTrackingEnabled();
 			baseAddrLength = getBaseAddressExpectedLength();
-			refMgr = new AllocationReferenceManager(MEM_TRACKING, AL_TRACKING);
+//			refMgr = new AllocationReferenceManager(MEM_TRACKING, AL_TRACKING);
 			log("Config:\n\tMem Tracking: [%s]\n\tMem Alignment: [%s]", MEM_TRACKING, AL_TRACKING);
 			UnsafeAdapterConfiguration uac = UnsafeAdapterConfigurator.getClassConfiguration(getClass());
 			if(uac.memTracking()){
@@ -102,7 +101,7 @@ public class BasicAllocationPointerTest extends BaseTest {
 	 */
 	@Test
 	public void testBasicAllocationSize() {
-		AllocationPointer ap = refMgr.newAllocationPointer();
+		AllocationPointer ap = AllocationPointerOperations.newAllocationPointerInstance(MEM_TRACKING, AL_TRACKING);
 		try {
 			final long rootAddress = ap.getAddressBase();
 			final byte dim = ap.getDimension();			
@@ -147,20 +146,21 @@ public class BasicAllocationPointerTest extends BaseTest {
 	 */	
 	@Test
 	public void testAllocationWriteRead() {
-		AllocationPointer ap = refMgr.newAllocationPointer();
-		long[] managedAddresses = new long[AllocationPointerOperations.ALLOC_SIZE];
+		AllocationPointer ap = AllocationPointerOperations.newAllocationPointerInstance(MEM_TRACKING, AL_TRACKING);
+//		long[] managedAddresses = new long[AllocationPointerOperations.ALLOC_SIZE];
 		try {
 			Assert.assertEquals("AllocationPointer Capacity", AllocationPointerOperations.ALLOC_SIZE, ap.getCapacity());
 			Assert.assertEquals("AllocationPointer Size", 0, ap.getSize());
 			long[][] testData = new long[AllocationPointerOperations.ALLOC_SIZE][3];			
 			for(int outer = 0; outer < AllocationPointerOperations.ALLOC_SIZE; outer++) {
 				testData[outer][0] = testUnsafe.allocateMemory(1);
-				managedAddresses[outer] = testData[outer][0]; 
+//				managedAddresses[outer] = testData[outer][0]; 
 				for(int inner = 1; inner < 3; inner++) {
 					testData[outer][inner] = nextPosInt();
 				}
 				ap.assignSlot(testData[outer][0], testData[outer][1], testData[outer][2]);
 				Assert.assertEquals("AllocationPointer Size", outer+1, ap.getSize());
+				Assert.assertEquals("AllocationPointer Full", outer==AllocationPointerOperations.ALLOC_SIZE-1, ap.isFull());
 			}
 			for(int outer = 0; outer < AllocationPointerOperations.ALLOC_SIZE; outer++) {
 				Assert.assertEquals("Address at index " + outer, testData[outer][0] , ap.getAddress(outer));
@@ -173,7 +173,6 @@ public class BasicAllocationPointerTest extends BaseTest {
 				}
 			}
 		} finally {
-			log("Will free Managed Addresses %s", Arrays.toString(managedAddresses));
 			ap.free();
 			validateAPAllocated(0, 0);
 		}
@@ -185,10 +184,40 @@ public class BasicAllocationPointerTest extends BaseTest {
 	 */
 	@Test
 	public void testIncrementingAllocationSize() {
-		AllocationPointer ap = refMgr.newAllocationPointer();
-		try {
-			/* No Op */
-		} finally {
+		AllocationPointer ap = AllocationPointerOperations.newAllocationPointerInstance(MEM_TRACKING, AL_TRACKING);
+		try {			
+			long[][] testData = new long[AllocationPointerOperations.ALLOC_SIZE + 1][3];			
+			for(int outer = 0; outer < AllocationPointerOperations.ALLOC_SIZE; outer++) {
+				testData[outer][0] = testUnsafe.allocateMemory(1);
+//				managedAddresses[outer] = testData[outer][0]; 
+				for(int inner = 1; inner < 3; inner++) {
+					testData[outer][inner] = nextPosInt();
+				}
+				ap.assignSlot(testData[outer][0], testData[outer][1], testData[outer][2]);
+				Assert.assertEquals("AllocationPointer Size", outer+1, ap.getSize());
+				Assert.assertEquals("AllocationPointer Full", outer==AllocationPointerOperations.ALLOC_SIZE-1, ap.isFull());
+			}
+			Assert.assertTrue("AllocationPointer Full", ap.isFull());
+			Assert.assertEquals("AllocationPointer Size", AllocationPointerOperations.ALLOC_SIZE, ap.getSize());
+			Assert.assertEquals("AllocationPointer Capacity", AllocationPointerOperations.ALLOC_SIZE, ap.getCapacity());
+			
+			testData[AllocationPointerOperations.ALLOC_SIZE][0] = testUnsafe.allocateMemory(1);
+			testData[AllocationPointerOperations.ALLOC_SIZE][1] = nextPosInt();
+			testData[AllocationPointerOperations.ALLOC_SIZE][2] = nextPosInt();
+			ap.assignSlot(
+					testData[AllocationPointerOperations.ALLOC_SIZE][0], 
+					testData[AllocationPointerOperations.ALLOC_SIZE][1], 
+					testData[AllocationPointerOperations.ALLOC_SIZE][2]
+			);
+			String fullEval = String.format("Full Eval: size: %s, capacity: %s, full: %s", ap.getSize(), ap.getCapacity(), ap.isFull());
+			Assert.assertFalse("AllocationPointer Full " + fullEval, ap.isFull());
+			Assert.assertEquals("AllocationPointer Size", AllocationPointerOperations.ALLOC_SIZE + 1, ap.getSize());
+			Assert.assertEquals("AllocationPointer Capacity", AllocationPointerOperations.ALLOC_SIZE * 2, ap.getCapacity());
+			log("OK !");
+//		} catch (Exception ex) {
+//			ex.printStackTrace(System.err);
+//			testUnsafe.throwException(ex);
+		} finally {			
 			ap.free();
 			validateAPAllocated(0, 0);
 		}

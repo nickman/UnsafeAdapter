@@ -42,4 +42,10 @@ public interface AddressAssignable {
 	 * @param alignmentOverhead  The alignment overhead being registered in bytes
 	 */	
 	public void setAllocated(long address, long size, long alignmentOverhead);
+	
+	/**
+	 * Remove the passed address from tracking
+	 * @param address the address to remove
+	 */
+	public void removeAllocated(long address);
 }

@@ -170,6 +170,16 @@ public class UnsafeAdapter {
 	 * Don't use this unless you know what you're doing.
 	 */
 	@SuppressWarnings("unused")
+	private static final void resetRefMgr() {
+		ReflectionHelper.invoke(adapter, "resetRefMgr");
+	}
+	
+	
+	/**
+	 * <b>TEST HOOK ONLY !</b>
+	 * Don't use this unless you know what you're doing.
+	 */
+	@SuppressWarnings("unused")
 	private static final void reset() {
 		try {
 			Field adapterField = ReflectionHelper.setFieldEditable(UnsafeAdapter.class, "adapter");
@@ -789,7 +799,7 @@ public class UnsafeAdapter {
 	/**
 	 * Allocates a chunk of memory and returns its address
 	 * @param size The number of bytes to allocate
-	 * @param dealloc The optional deallocatable to register for deallocation when it becomes phantom reachable
+	 * @param memoryManager The object to handle memory management of the allocated memory block
 	 * @return The address of the allocated memory
 	 * @see sun.misc.Unsafe#allocateMemory(long)
 	 */
@@ -817,12 +827,12 @@ public class UnsafeAdapter {
 	 * The resulting native pointer will never be zero, and will be aligned for all value types.  
 	 * Dispose of this memory by calling #freeMemory , or resize it with #reallocateMemory.
 	 * @param size The size of the block of memory to allocate in bytes
-	 * @param dealloc The optional deallocatable to register for deallocation when it becomes phantom reachable
+	 * @param memoryManager The object to handle memory management of the allocated memory block
 	 * @return The address of the allocated memory block
 	 * @see sun.misc.Unsafe#allocateMemory(long)
 	 */
-	public static long allocateAlignedMemory(long size, Deallocatable dealloc) {
-		return adapter.allocateAlignedMemory(size, dealloc);
+	public static long allocateAlignedMemory(long size, Object memoryManager) {
+		return adapter.allocateAlignedMemory(size, memoryManager);
 	}
 	
 	/**
@@ -852,6 +862,19 @@ public class UnsafeAdapter {
 	public static long reallocateAlignedMemory(long address, long size) {
 		return adapter.reallocateAlignedMemory(address, size);
 	}
+	
+	/**
+	 * Resizes a new block of aligned (if enabled) native memory, to the given size in bytes.
+	 * @param address The address of the existing allocation
+	 * @param size The size of the new allocation in bytes
+	 * @param memoryManager The object to handle memory management of the allocated memory block
+	 * @return The address of the new allocation
+	 * @see sun.misc.Unsafe#reallocateMemory(long, long)
+	 */
+	public static long reallocateAlignedMemory(long address, long size, Object memoryManager) {
+		return adapter.reallocateAlignedMemory(address, size, memoryManager);
+	}
+	
 	
 	//===========================================================================================================
 	//	Copy Memory Ops

@@ -36,7 +36,7 @@ import java.util.Comparator;
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>com.heliosapm.unsafe.AllocationPointer.AllocationPointerPhantomRef</code></p>
  */
-class AllocationPointerPhantomRef extends PhantomReference<Object> implements AllocationTracker {
+class AllocationPointerPhantomRef extends PhantomReference<AllocationPointer> implements AllocationTracker {
 	/** The address that the referenced AllocationPointer pointed to */
 	private long address;
 
@@ -64,7 +64,7 @@ class AllocationPointerPhantomRef extends PhantomReference<Object> implements Al
 	 * @param address The actual reference to the {@link AllocationPointer}'s address long array.
 	 * @param refQueue The reference queue to register with
 	 */
-	AllocationPointerPhantomRef(AllocationPointer referent, long address, ReferenceQueue<Object> refQueue) {
+	AllocationPointerPhantomRef(AllocationPointer referent, long address, ReferenceQueue<? super AllocationPointer> refQueue) {
 		super(referent, refQueue);
 		this.address = address;		
 	}
@@ -73,7 +73,7 @@ class AllocationPointerPhantomRef extends PhantomReference<Object> implements Al
 	 * Returns the UnsafeAdapter provided reference id
 	 * @return the UnsafeAdapter provided reference id
 	 */
-	public long getRefId() {
+	public long getReferenceId() {
 		return AllocationPointerOperations.getReferenceId(address);
 	}
 	

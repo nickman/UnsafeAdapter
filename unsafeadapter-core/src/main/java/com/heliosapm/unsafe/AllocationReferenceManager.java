@@ -49,13 +49,16 @@ public class AllocationReferenceManager implements Runnable {
 	// =========================================================
 	//  Reference Tracking
 	// =========================================================
-	/** A map of phantom refs */
-	final NonBlockingHashMapLong<Reference<Object>> trackedRefs = new NonBlockingHashMapLong<Reference<Object>>(1024, true); 
+	/** A map of phantom refs */ 
+	final NonBlockingHashMapLong<AllocationPointerPhantomRef> trackedRefs = new NonBlockingHashMapLong<AllocationPointerPhantomRef>(1024, true);
 	/** The interface tracker to cache which classes implement "special" UnsafeAdapter interfaces */
 	final InterfaceTracker ifaceTracker = new InterfaceTracker();
     /** Serial number factory for memory allocation references */
 	protected final AtomicLong refSerial = new AtomicLong(0L);
 
+	/** A map of memory allocation sizes and overhead keyed by the address for unmanaged memory allocations */ 
+	final NonBlockingHashMapLong<long[]> trackedRaw;
+	
 	
 	// =========================================================
 	//  Aggregate Allocation Tracking
@@ -79,6 +82,19 @@ public class AllocationReferenceManager implements Runnable {
 	/** Serial number factory for cleaner threads */
 	private static final AtomicLong cleanerSerial = new AtomicLong(0L);
 	
+	/**
+	 * <b>TEST HOOK ONLY !</b>
+	 * Don't use this unless you know what you're doing.
+	 */
+	@SuppressWarnings("unused")
+	private final void reset() {
+		if(totalMemoryAllocated!=null) totalMemoryAllocated.set(0L);
+		if(totalAllocationCount!=null) totalAllocationCount.set(0L);
+		if(totalAlignmentOverhead!=null) totalAlignmentOverhead.set(0L);
+		if(trackedRaw!=null) trackedRaw.clear();
+		if(trackedRefs!=null) trackedRefs.clear();
+	}
+	
 	
 	/**
 	 * Creates a new AllocationReferenceManager
@@ -91,11 +107,13 @@ public class AllocationReferenceManager implements Runnable {
 		if(this.memTracking) {
 			totalMemoryAllocated = new AtomicLong();
 			totalAllocationCount = new AtomicLong();
-			totalAlignmentOverhead = new AtomicLong();			
+			totalAlignmentOverhead = new AtomicLong();		
+			trackedRaw = new NonBlockingHashMapLong<long[]>(1024, true);
 		} else {
 			totalMemoryAllocated = null;
 			totalAllocationCount = null;
-			totalAlignmentOverhead = null;			
+			totalAlignmentOverhead = null;
+			trackedRaw = null;
 		}		
 		// =========================================================
 		// Start the cleaner thread
@@ -119,7 +137,7 @@ public class AllocationReferenceManager implements Runnable {
 	public final AllocationPointer newAllocationPointer() {
 		final long refId = refSerial.incrementAndGet();
 		final AllocationPointer ap = new AllocationPointer(memTracking, memAlignment, refId);
-		Reference<Object> ref = ap.getReference(refQueue);
+		AllocationPointerPhantomRef ref = ap.getReference(refQueue);
 		trackedRefs.put(refId, ref);
 		return ap;
 	}
@@ -196,18 +214,216 @@ public class AllocationReferenceManager implements Runnable {
 		}
 	}
 	
+	/**
+	 * Increments the memory and overhead counters if enabled in each case
+	 * @param size The memory allocation size
+	 * @param alignmentOverhead The cache-line memory alignment overhead
+	 */
+	final void increment(final long size, final long alignmentOverhead) {
+		if(memTracking) {
+			totalMemoryAllocated.addAndGet(size);
+			totalAllocationCount.incrementAndGet();			
+		}
+		if(memAlignment) {
+			totalAlignmentOverhead.addAndGet(alignmentOverhead);
+		}
+	}
 	
-	final void allocateMemory(long size, long alignmentOverhead, Object memoryManager) {
+	/**
+	 * Decrements the memory and overhead counters if enabled in each case
+	 * @param size The memory allocation size
+	 * @param alignmentOverhead The cache-line memory alignment overhead
+	 */
+	final void decrement(final long size, final long alignmentOverhead) {
+		if(memTracking && size > 0) {
+			totalMemoryAllocated.addAndGet(0-size);
+			totalAllocationCount.decrementAndGet();			
+		}
+		if(memAlignment && alignmentOverhead > 0) {
+			totalAlignmentOverhead.addAndGet(0-alignmentOverhead);
+		}
+	}
+	
+	
+	
+	/**
+	 * Tracks a new memory allocation
+	 * @param allocatedAddress The allocated address
+	 * @param size The size of the allocation
+	 * @param alignmentOverhead The cache-line memory alignment overhead
+	 * @param memoryManager The optional memory manager
+	 */
+	final void allocateMemory(final long allocatedAddress, final long size, final long alignmentOverhead, final Object memoryManager) {
+		if(memoryManager!=null) {
+			final int mask = ifaceTracker.getMask(memoryManager);
+			if(mask==0)throw new IllegalArgumentException("The supplied memory manager of type [" + memoryManager.getClass().getName() + "] does not implement any known memory management interfaces");
+			if(InterfaceTracker.isAllocationPointer(mask)) {
+				((AllocationPointer)memoryManager).assignSlot(allocatedAddress, size, alignmentOverhead);				
+			} else {
+				if(InterfaceTracker.isAssignable(mask)) {
+					((AddressAssignable)memoryManager).setAllocated(allocatedAddress, size, alignmentOverhead);
+				}
+				if(InterfaceTracker.isDeallocatable(mask)) {
+					Deallocatable dealloc = (Deallocatable)memoryManager;
+					final long refId;
+					final AllocationPointerPhantomRef apRef;
+					if(dealloc.getReferenceId()==0) {
+						apRef = newAllocationPointer().ingest(dealloc).getReference(refQueue);
+						refId = apRef.getReferenceId();
+					} else {
+						refId = dealloc.getReferenceId();
+						apRef = trackedRefs.get(refId);
+						if(apRef==null) throw new RuntimeException("Failed to find AllocationPointerPhantomRef for reference id [" + refId + "]");					
+					}
+					apRef.add(allocatedAddress, size, alignmentOverhead);
+				}						
+			}
+			increment(size, alignmentOverhead);		
+		} else {
+			incrementUnmanaged(allocatedAddress, size, alignmentOverhead);
+		}
 		
 	}
 
-	final void reallocateMemory(long priorAddress, long newAddress, long size, long alignmentOverhead, Object memoryManager) {
-		
+	/**
+	 * Tracks a new memory re-allocation
+	 * @param priorAddress The prior address will was deallocated
+	 * @param allocatedAddress The allocated address
+	 * @param size The size of the allocation
+	 * @param alignmentOverhead The cache-line memory alignment overhead
+	 * @param memoryManager The optional memory manager
+	 */
+	final void reallocateMemory(final long priorAddress, final long allocatedAddress, final long size, final long alignmentOverhead, final Object memoryManager) {
+		if(memoryManager!=null) {
+			final int mask = ifaceTracker.getMask(memoryManager);
+			if(mask==0)throw new IllegalArgumentException("The supplied memory manager of type [" + memoryManager.getClass().getName() + "] does not implement any known memory management interfaces");
+			if(InterfaceTracker.isAllocationPointer(mask)) {
+				final AllocationPointer ap = (AllocationPointer)memoryManager;
+				// ===========================================================================
+				// handle decrements
+				// ===========================================================================
+				final int index = ap.findIndexForAddress(priorAddress);
+				if(index != -1) {
+					decrement(ap.getAllocationSize(index), ap.getAlignmentOverhead(index));
+					ap.reassignSlot(index, allocatedAddress, size, alignmentOverhead);
+				} else {
+					// FIXME:  What the heck do we do now ?
+					ap.assignSlot(allocatedAddress, size, alignmentOverhead);
+				}
+			} else {
+				if(InterfaceTracker.isAssignable(mask)) {
+					((AddressAssignable)memoryManager).setAllocated(allocatedAddress, size, alignmentOverhead);
+					((AddressAssignable)memoryManager).removeAllocated(priorAddress);
+				}
+				if(InterfaceTracker.isDeallocatable(mask)) {
+					Deallocatable dealloc = (Deallocatable)memoryManager;
+					final long refId;
+					final AllocationPointerPhantomRef apRef;
+					if(dealloc.getReferenceId()==0) {
+						apRef = newAllocationPointer().ingest(dealloc).getReference(refQueue);
+						refId = apRef.getReferenceId();
+					} else {
+						refId = dealloc.getReferenceId();
+						apRef = trackedRefs.get(refId);
+						if(apRef==null) throw new RuntimeException("Failed to find AllocationPointerPhantomRef for reference id [" + refId + "]");					
+					}
+					decrement(apRef.getAllocationSize(priorAddress), apRef.getAlignmentOverhead(priorAddress));
+					apRef.clearAddress(priorAddress);
+					apRef.add(allocatedAddress, size, alignmentOverhead);
+				}						
+			}
+			increment(size, alignmentOverhead);
+		} else {
+			incrementUnmanaged(priorAddress, allocatedAddress, size, alignmentOverhead);
+		}					
 	}
 	
 	
-	final void freeMemory(long address, Object memoryManager) {
-		
+	/**
+	 * Untracks a memory allocation
+	 * @param freedAddress The address that was freed
+	 * @param memoryManager The optional memory manager
+	 */
+	final void freeMemory(final long freedAddress, final Object memoryManager) {
+		if(memoryManager!=null) {
+			final int mask = ifaceTracker.getMask(memoryManager);
+			if(mask==0)throw new IllegalArgumentException("The supplied memory manager of type [" + memoryManager.getClass().getName() + "] does not implement any known memory management interfaces");
+			if(InterfaceTracker.isAllocationPointer(mask)) {
+				final AllocationPointer ap = (AllocationPointer)memoryManager;
+				final int index = ap.findIndexForAddress(freedAddress);
+				if(index != -1) {
+					decrement(ap.getAllocationSize(index), ap.getAlignmentOverhead(index));
+					ap.clearAddress(index);
+				}
+			} else {
+				if(InterfaceTracker.isAssignable(mask)) {					
+					((AddressAssignable)memoryManager).removeAllocated(freedAddress);
+				}
+				if(InterfaceTracker.isDeallocatable(mask)) {
+					Deallocatable dealloc = (Deallocatable)memoryManager;
+					final long refId;
+					final AllocationPointerPhantomRef apRef;
+					if(dealloc.getReferenceId()!=0) {
+						refId = dealloc.getReferenceId();
+						apRef = trackedRefs.get(refId);
+						if(apRef==null) throw new RuntimeException("Failed to find AllocationPointerPhantomRef for reference id [" + refId + "]");
+						decrement(apRef.getAllocationSize(freedAddress), apRef.getAlignmentOverhead(freedAddress));
+						apRef.clearAddress(freedAddress);
+					}
+				}
+			}
+		} else {
+			decrementUnmanaged(freedAddress);
+		}
+	}
+	
+	/**
+	 * Tracks the size and alignment overhead of an unmanaged allocation
+	 * @param allocatedAddress The allocated address
+	 * @param size The size of the allocation
+	 * @param alignmentOverhead The alignment overhead
+	 */
+	private final void incrementUnmanaged(final long allocatedAddress, final long size, final long alignmentOverhead) {
+		if(memTracking) {
+			totalAllocationCount.incrementAndGet();
+			totalMemoryAllocated.addAndGet(size);
+			if(memAlignment) totalAlignmentOverhead.addAndGet(alignmentOverhead);
+			long[] prior = trackedRaw.put(allocatedAddress, memAlignment ? new long[]{size, alignmentOverhead} : new long[]{size});
+			if(prior!=null) {
+				// =======  COLLISION !!!  What do we do with it ?
+			}
+		}
+	}
+	
+	/**
+	 * Tracks the size and alignment overhead of an unmanaged re-allocation
+	 * @param priorAddress The de-allocated address
+	 * @param allocatedAddress The allocated address
+	 * @param size The size of the allocation
+	 * @param alignmentOverhead The alignment overhead
+	 */
+	private final void incrementUnmanaged(final long priorAddress, final long allocatedAddress, final long size, final long alignmentOverhead) {
+		if(memTracking) {
+			decrementUnmanaged(priorAddress);
+			incrementUnmanaged(allocatedAddress, size, alignmentOverhead);
+		}
+	}
+	
+	/**
+	 * Decrements the size and overhead for the freed memory address
+	 * @param priorAddress The freed address
+	 */
+	private final void decrementUnmanaged(final long priorAddress) {
+		if(memTracking) {			
+			long[] prior = trackedRaw.remove(priorAddress);
+			if(prior!=null) {
+				if(prior.length==1) {
+					decrement(prior[0], 0L);
+				} else if(prior.length==2) {
+					decrement(prior[0], prior[1]);
+				}
+			}
+		}
 	}
 	
 	

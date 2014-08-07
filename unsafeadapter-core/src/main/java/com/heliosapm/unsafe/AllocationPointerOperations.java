@@ -107,11 +107,11 @@ public class AllocationPointerOperations {
 	 * (not including the initial slots for the capacity and size) 
 	 */
 	public static final int ALLOC_SIZE;	
-	/** 
-	 * The size of the buffer expressed as the number of allocated bytes
-	 * (not including the initial 8 bytes for the capacity and size) 
-	 */
-	public static final int ALLOC_MEM_SIZE;	
+//	/** 
+//	 * The size of the buffer expressed as the number of allocated bytes
+//	 * (not including the initial 8 bytes for the capacity and size) 
+//	 */
+//	public static final int ALLOC_MEM_SIZE;	
 	/** The size of an <b><code>Object[]</code></b> array offset */
     public static final long OBJECTS_OFFSET;
     /** The size of a <b><code>long[]</code></b> array offset */
@@ -125,6 +125,10 @@ public class AllocationPointerOperations {
     private static final AtomicLong totalAllocated;
     /** A counter of total alignment overhead */
     private static final AtomicLong totalOverhead;   
+    
+	/** Provides refIfds since we're not using a refMgr */
+	private static final AtomicLong refIdSerial = new AtomicLong(0L);
+
     
 	static {
 		try {
@@ -145,7 +149,7 @@ public class AllocationPointerOperations {
 			tmp = 1;
 		}
 		ALLOC_SIZE = tmp;
-		ALLOC_MEM_SIZE = ALLOC_SIZE * ADDRESS_SIZE;
+//		ALLOC_MEM_SIZE = ALLOC_SIZE * ADDRESS_SIZE;
 		MANAGED_ALLOC = System.getProperties().containsKey(MANAGED_ALLOC_PROP);
 		if(MANAGED_ALLOC) {
 			totalAllocated = new AtomicLong(0L); 
@@ -156,6 +160,44 @@ public class AllocationPointerOperations {
 			totalOverhead = null;
 			allocations = null;
 		}
+	}
+	
+	/**
+	 * Ingests a {@link Deallocatable} and assigns it a ref id
+	 * @param rootAddress The root address of the AllocationPointer
+	 * @param dealloc the Deallocatable to ingest
+	 */
+	static final void ingest(final long rootAddress, Deallocatable dealloc) {
+		if(dealloc==null) throw new IllegalArgumentException("The passed Deallocatable was null");
+		final long myRefId = getReferenceId(rootAddress);
+		long dRefId = dealloc.getReferenceId();
+		if(dRefId != 0 && dRefId != myRefId) throw new IllegalArgumentException("The passed Deallocatable has already been assigned a RefId");
+		if(dRefId == myRefId) return;
+		if(dealloc.getAddresses()==null || dealloc.getAddresses().length==0) throw new IllegalStateException("The passed Deallocatable's getAddresses() op returned a null or zero length address array");
+		dealloc.setReferenceId(myRefId);
+		for(long address: dealloc.getAddresses()[0]) {
+			if(address > 0) {
+				assignSlot(rootAddress, address, 0L, 0L);
+			}
+		}
+	}
+	
+	/**
+	 * <p>Creates a new AllocationPointer which is <b>NOT</b> hooked up to a RefManager to auto clear the reference.
+	 * <b>Only</b> use this when you're going to call {@link AllocationPointer#free()} yourself, otherwise you will 
+	 * be leaking native memory allocations all over the place.</p>
+	 * <p>The preferred way to create an AllocationPointer (i.e. one which will be cleared when the instance becomes phantom reachable)
+	 * is: <pre>
+	 * 			AllocationReferenceManager refMgr = new AllocationReferenceManager(TRUE, FALSE);
+	 * 			AllocationPointer ap = refMgr.newAllocationPointer();
+	 *  </pre></p>
+	 * <p>This call is intended as a testing hook or for special circumstances</p>
+	 * @param memTracking Indicates if memory tracking is enabled
+	 * @param memAlignment Indicates if cache-line memory alignment is enabled 
+	 * @return a unattached AllocationPointer
+	 */
+	public static final AllocationPointer newAllocationPointerInstance(boolean memTracking, boolean memAlignment) {
+		return new AllocationPointer(memTracking, memAlignment, refIdSerial.incrementAndGet());		
 	}
     
     
@@ -272,20 +314,29 @@ public class AllocationPointerOperations {
 	}
 	
 	
-	private static final void setAddressOfDim(final long address, final byte dim, final long newAddress) {
-		unsafe.putAddress(getAddressOfDim(address, dim), newAddress);
+	/**
+	 * Reassigns the address of a dim in the root space. Called after an extend.
+	 * @param rootAddress The root address of the AllocationPointer
+	 * @param dim The dimension to update
+	 * @param newAddress The new address of the dim, assigned during the extend call.
+	 */
+	private static final void setAddressOfDim(final long rootAddress, final byte dim, final long newAddress) {
+		unsafe.putAddress(rootAddress + (dim * ADDRESS_SIZE), newAddress);
 	}
 	
-	private static final void setAddressOfDim(final long address, final long newAddress) {
-		unsafe.putAddress(getAddressOfDim(address, ZERO_BYTE), newAddress);
-	}
 	
-	private static final void initAllocationPointer(final long address, final long refId, final byte dim) {
-		unsafe.putInt(address, ALLOC_SIZE);
-		unsafe.putInt(address + SIZE_OFFSET, 0);
-		unsafe.putLong(address + REFID_OFFSET, refId);
-		unsafe.putByte(address + DIM_OFFSET, dim);
-		unsafe.setMemory(address + HEADER_SIZE, ALLOC_MEM_SIZE, ZERO_BYTE);		
+	/**
+	 * Initializes a dim address space
+	 * @param actualAddress The actual dim address (not the root address)
+	 * @param refId The ref Id to write into the space
+	 * @param dim The dim to initialize
+	 */
+	private static final void initAllocationPointer(final long actualAddress, final long refId, final byte dim) {
+		unsafe.putInt(actualAddress, ALLOC_SIZE);
+		unsafe.putInt(actualAddress + SIZE_OFFSET, 0);
+		unsafe.putLong(actualAddress + REFID_OFFSET, refId);
+		unsafe.putByte(actualAddress + DIM_OFFSET, dim);
+		unsafe.setMemory(actualAddress + HEADER_SIZE, (ALLOC_SIZE * ADDRESS_SIZE), ZERO_BYTE);		
 	}
 	
 	/**
@@ -614,22 +665,19 @@ public class AllocationPointerOperations {
 	
 	/**
 	 * Clears the address at the specified index in the addressed AllocationPointerOperations
-	 * @param address The address array of the allocation pointer memory block which could be a length of:<ol>
-	 * 	<li>Simple address management</li>
-	 *  <li>Address management with memory tracking</li>
-	 *  <li>Address management with memory tracking and cache-line alignment overhead</li>
-	 * </ol>
-	 * @param index the index of the AllocationPointerOperations's address slots to clear
+	 * @param rootAddress The address of the AllocationPointer
+	 * @param index the index of the AllocationPointer's address slot to clear
 	 */
-	public static final void clearAddress(final long address, final int index) {
-		if(index >= getSize(address)) throw new IllegalArgumentException("Invalid index [" + index + "]. Size is [" + getSize(address) + "]");
+	public static final void clearAddress(final long rootAddress, final int index) {
+		if(index==-1) return;
+		if(index >= getSize(rootAddress)) throw new IllegalArgumentException("Invalid index [" + index + "]. Size is [" + getSize(rootAddress) + "]");
 		final long offset = HEADER_SIZE + (index * ADDRESS_SIZE);
-		final byte dim = getDimension(address);
-		put(address, ZERO_BYTE, offset, 0L);
+		final byte dim = getDimension(rootAddress);
+		put(rootAddress, ZERO_BYTE, offset, 0L);
 		if(dim>1) {
-			put(address, ONE_BYTE, offset, 0L);
+			put(rootAddress, ONE_BYTE, offset, 0L);
 			if(dim>2) {
-				put(address, TWO_BYTE, offset, 0L);
+				put(rootAddress, TWO_BYTE, offset, 0L);
 			}
 		}
 	}
@@ -756,7 +804,7 @@ public class AllocationPointerOperations {
 	 * @return The [possibly empty] array of addresses just deallocated
 	 */
 	public static final long[][] free(final long address, final boolean includePostMortem) {
-		log("Starting full AP Free for root address [%s]", address);
+//		log("Starting full AP Free for root address [%s]", address);
 		final byte dim = getDimension(address);				
 		final int size = getSize(address);
 		long[][] deadAddresses = includePostMortem ? size>0 ? new long[size][dim] : EMPTY_DLONG_ARR : EMPTY_DLONG_ARR;
@@ -881,9 +929,16 @@ public class AllocationPointerOperations {
 			if(dim>2) {
 				extend(address, getAddressOfDim(address, TWO_BYTE), endOffset, currentCap, TWO_BYTE);
 			}
-		}
-		
+		}		
 	}
+	
+	private static void extend(final long rootAddress, final long actualAddress, final long endOffset, final int currentCap, final byte dim) {
+		final long newAddress = _reallocateMemory(actualAddress, endOffset + (ALLOC_SIZE * ADDRESS_SIZE));
+		unsafe.setMemory(newAddress + endOffset, (ALLOC_SIZE * ADDRESS_SIZE), ZERO_BYTE);
+		unsafe.putInt(newAddress, currentCap + ALLOC_SIZE);
+		setAddressOfDim(rootAddress, dim, newAddress);
+	}
+	
 	
 	/**
 	 * Returns the managed addresses
@@ -898,12 +953,6 @@ public class AllocationPointerOperations {
 		
 	}
 	
-	private static void extend(final long rootAddress, final long actualAddress, final long endOffset, final int currentCap, final byte dim) {
-		final long newAddress = _reallocateMemory(actualAddress, endOffset + ALLOC_MEM_SIZE);
-		unsafe.setMemory(newAddress + endOffset, ALLOC_MEM_SIZE, ZERO_BYTE);
-		unsafe.putInt(newAddress, currentCap + ALLOC_SIZE);
-		setAddressOfDim(rootAddress, dim, newAddress);
-	}
 	
 	private AllocationPointerOperations() {}
 	

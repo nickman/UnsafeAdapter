@@ -38,7 +38,7 @@ import test.com.heliosapm.unsafe.UnsafeAdapterConfiguration;
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>test.com.heliosapm.unsafe.ap.MemTrackingAllocationPointerTest</code></p>
  */
-@UnsafeAdapterConfiguration(memTracking=true, apAllocSize=2, apManaged=true, memAlignment=true)
+@UnsafeAdapterConfiguration(memTracking=true, apAllocSize=10, apManaged=true)
 public class MemTrackingAllocationPointerTest extends BasicAllocationPointerTest {
 
 	/**

@@ -156,6 +156,15 @@ public class DefaultUnsafeAdapterImpl implements DefaultUnsafeAdapterImplMBean {
 		}
 	}
 	
+	/**
+	 * <b>TEST HOOK ONLY !</b>
+	 * Don't use this unless you know what you're doing.
+	 */
+	@SuppressWarnings("unused")
+	private final void resetRefMgr() {
+		ReflectionHelper.invoke(refMgr, "reset");
+	}
+	
 	
 	
 	
@@ -268,8 +277,15 @@ public class DefaultUnsafeAdapterImpl implements DefaultUnsafeAdapterImplMBean {
 	 */			
 	long _allocateMemory(final long size, final long alignmentOverhead, Object memoryManager) {
 		final long address = UNSAFE.allocateMemory(size);
-		refMgr.allocateMemory(size, alignmentOverhead, memoryManager);
-		return address;
+		try {
+			refMgr.allocateMemory(address, size, alignmentOverhead, memoryManager);
+			return address;
+		} catch (Exception ex) {
+			UNSAFE.freeMemory(address);
+			UNSAFE.throwException(ex);
+		}
+		throw new RuntimeException();
+		
 	}
 	
 	
@@ -303,6 +319,22 @@ public class DefaultUnsafeAdapterImpl implements DefaultUnsafeAdapterImplMBean {
 			return _reallocateMemory(address, actual, actual-size, null);
 		} 
 		return _reallocateMemory(address, size, 0, null);
+	}
+	
+	/**
+	 * Resizes a new block of aligned (if enabled) native memory, to the given size in bytes.
+	 * @param address The address of the existing allocation
+	 * @param size The size of the new allocation in bytes
+	 * @param memoryManager The object to handle memory management of the allocated memory block
+	 * @return The address of the new allocation
+	 * @see sun.misc.Unsafe#reallocateMemory(long, long)
+	 */
+	public long reallocateAlignedMemory(long address, long size, Object memoryManager) {
+		if(alignMem) {
+			long actual = UnsafeAdapter.findNextPositivePowerOfTwo(size);
+			return _reallocateMemory(address, actual, actual-size, null);
+		} 
+		return _reallocateMemory(address, size, 0, memoryManager);
 	}	
 	
 	/**
@@ -346,15 +378,24 @@ public class DefaultUnsafeAdapterImpl implements DefaultUnsafeAdapterImplMBean {
 	//	Free Memory Ops
 	//===========================================================================================================	
 	
+	/**
+	 * Frees the memory allocated at the passed address
+	 * @param address The address of the memory to free
+	 * @see sun.misc.Unsafe#freeMemory(long)
+	 */
+	void freeMemory(final long address, final Object memoryManager) {
+		if(address<1) return;
+		UNSAFE.freeMemory(address);
+		refMgr.freeMemory(address, memoryManager);
+	}
 	
 	/**
 	 * Frees the memory allocated at the passed address
 	 * @param address The address of the memory to free
 	 * @see sun.misc.Unsafe#freeMemory(long)
 	 */
-	void freeMemory(long address) {
-		if(address<1) return;
-		UNSAFE.freeMemory(address);
+	void freeMemory(final long address) {
+		freeMemory(address, null);
 	}
 	
 	//===========================================================================================================

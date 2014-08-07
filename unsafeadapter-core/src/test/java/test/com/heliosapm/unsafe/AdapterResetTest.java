@@ -60,6 +60,7 @@ public class AdapterResetTest extends BaseTest {
 	 * Tests a reset then switch to safe
 	 */
 	@Test
+	@Ignore
 	public void switchToSafe() {
 		System.setProperty(UnsafeAdapter.SAFE_MANAGER_PROP, "true");
 		ReflectionHelper.invoke(UnsafeAdapter.class, "reset");

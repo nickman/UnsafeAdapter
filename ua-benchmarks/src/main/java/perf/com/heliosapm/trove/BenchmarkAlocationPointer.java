@@ -24,18 +24,24 @@
  */
 package perf.com.heliosapm.trove;
 
+import java.lang.reflect.Field;
 import java.util.Random;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.State;
 
+import sun.misc.Unsafe;
+
 import com.heliosapm.unsafe.AllocationPointer;
+import com.heliosapm.unsafe.AllocationPointerOperations;
+import com.heliosapm.unsafe.AllocationReferenceManager;
 import com.heliosapm.unsafe.UnsafeAdapter;
 
 /**
  * <p>Title: BenchmarkAlocationPointer</p>
  * <p>Description: </p> 
+ * <p>Run with:  <b><code>java -jar target\benchmarks.jar -wi 3 -i 3 ".*BenchmarkAlocationPointer.*"</code></b></p>
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>perf.com.heliosapm.trove.BenchmarkAlocationPointer</code></p>
@@ -43,27 +49,82 @@ import com.heliosapm.unsafe.UnsafeAdapter;
 @State(Scope.Thread)
 public class BenchmarkAlocationPointer {
 	
+	private static final Random r = new Random(System.currentTimeMillis());
+	private static final int valueCount = 1000;
+	/** A direct reference to the unsafe class instance */
+	protected static final Unsafe testUnsafe;
 	
-
+	private static final AllocationReferenceManager refMgr = new AllocationReferenceManager(false, false);
+	private static final AllocationReferenceManager refMgrMem = new AllocationReferenceManager(true, false);
+	private static final AllocationReferenceManager refMgrMemAlign = new AllocationReferenceManager(true, false);
+	
+	static {
+        try {        	
+            Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+            theUnsafe.setAccessible(true);
+            testUnsafe = (Unsafe) theUnsafe.get(null);
+        } catch (Throwable t) {
+        	throw new RuntimeException(t);
+        }
+	}
+	
+	
+	protected int apTest(final AllocationPointer ap, final boolean free) {
+		try {
+			int success = 0;
+			
+			final long[] writeAddresses = new long[valueCount];
+			for(short i = 0; i < writeAddresses.length; i++) {
+				writeAddresses[i] = testUnsafe.allocateMemory(1);
+				ap.assignSlot(writeAddresses[i]);				
+			}
+			for(short i = 0; i < writeAddresses.length; i++) {
+				final long readValue = ap.getAddress(i);
+				if(readValue==writeAddresses[i]) success++;
+			}			
+			return success;
+		} finally {
+			if(free) ap.free();
+		}		
+	}
+	
+	
 	@Benchmark
-	public int testFixedSizeAllocationPointer() {	
-		final Random r = new Random(System.currentTimeMillis());
-		int success = 0;
-		AllocationPointer ap = new AllocationPointer();
-		final int valueCount = 1000;;
-		final long[] writeValues = new long[valueCount];
-		for(short i = 0; i < writeValues.length; i++) {
-			writeValues[i] = r.nextLong();
-			final long address = UnsafeAdapter.allocateMemory(8, ap);
-			UnsafeAdapter.putLong(address, writeValues[i]);
-		}
-		for(short i = 0; i < writeValues.length; i++) {
-			final long readValue = UnsafeAdapter.getLong(ap.getAddress(i));
-			if(readValue==writeValues[i]) success++;
-		}
-		final long expectedAllocation = ((long)valueCount << 3);
-		ap = null;		
-		return success;
+	public int testAllocationPointer() {	
+		return apTest(AllocationPointerOperations.newAllocationPointerInstance(false, false), true);
+	}
+	
+	@Benchmark
+	public int testAllocationPointerMemTracking() {	
+		return apTest(AllocationPointerOperations.newAllocationPointerInstance(true, false), true);
+	}
+	
+	@Benchmark
+	public int testAllocationPointerMemAlignTracking() {	
+		return apTest(AllocationPointerOperations.newAllocationPointerInstance(true, true), true);
+	}
+	
+	@Benchmark
+	public int testAllocationPointerAuto() {	
+		return apTest(refMgr.newAllocationPointer(), false);
+	}
+	
+	@Benchmark
+	public int testAllocationPointerMemTrackingAuto() {	
+		return apTest(refMgrMem.newAllocationPointer(), false);
+	}
+	
+	@Benchmark
+	public int testAllocationPointerMemAlignTrackingAuto() {	
+		return apTest(refMgrMemAlign.newAllocationPointer(), false);
+	}
+	
+	
+	public static void main(String[] args) {
+		BenchmarkAlocationPointer bap = new BenchmarkAlocationPointer();
+		int x = bap.testAllocationPointerMemAlignTrackingAuto();
+		if(x==valueCount) System.out.println("SUCCESS!");
+		else System.out.println("FAIL! " + x + "vs expected " + valueCount);		 
 	}
 	
 }

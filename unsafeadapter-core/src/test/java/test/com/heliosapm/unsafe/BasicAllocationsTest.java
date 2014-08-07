@@ -27,8 +27,10 @@ package test.com.heliosapm.unsafe;
 
 
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
+import com.heliosapm.unsafe.ReflectionHelper;
 import com.heliosapm.unsafe.UnsafeAdapter;
 
 /**
@@ -41,6 +43,17 @@ import com.heliosapm.unsafe.UnsafeAdapter;
 @SuppressWarnings("restriction")
 @UnsafeAdapterConfiguration()
 public class BasicAllocationsTest extends BaseTest {
+	
+	/**
+	 * Initializes the config and creates a new AllocationReferenceManager in accordance.
+	 */
+	@Before
+	public void beforeTest() {
+		if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+			ReflectionHelper.invoke(UnsafeAdapter.class, "resetRefMgr");
+		}
+	}
+	
 
 
 	/**

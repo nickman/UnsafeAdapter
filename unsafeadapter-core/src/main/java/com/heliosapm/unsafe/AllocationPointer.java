@@ -25,6 +25,7 @@
 package com.heliosapm.unsafe;
 
 import java.lang.ref.PhantomReference;
+import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 
 /**
@@ -36,11 +37,11 @@ import java.lang.ref.ReferenceQueue;
  * <p><code>com.heliosapm.unsafe.AllocationPointer</code></p>
  */
 
-public class AllocationPointer implements ReferenceProvider<Object>, AddressAssignable {
+public class AllocationPointer implements ReferenceProvider<AllocationPointer>, AddressAssignable {
 	/** The address of the memory block allocated for this AllocationPointer */
 	private final long address;
 	/** The phantom reference to this allocation pointer if one has been requested */
-	private PhantomReference<Object> phantomRef = null;
+	private AllocationPointerPhantomRef phantomRef = null;
 
 	// =====================================
 	//  MUST BE CREATED BY UA
@@ -62,6 +63,14 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 */
 	public final long getAddressBase() {
 		return address;
+	}
+	
+	/**
+	 * Returns this AllocationPointer's reference id
+	 * @return the reference id
+	 */
+	public final long getReferenceId() {
+		return AllocationPointerOperations.getReferenceId(address);
 	}
 	
 	/**
@@ -96,6 +105,26 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 		address = AllocationPointerOperations.newAllocationPointer(memTracking, memAlignment, refId);
 	}
 	
+	/**
+	 * Ingests a {@link Deallocatable} and assigns it a ref id
+	 * @param dealloc the Deallocatable to ingest
+	 * @return this AllocationPointer
+	 */
+	final AllocationPointer ingest(Deallocatable dealloc) {
+		AllocationPointerOperations.ingest(address, dealloc);
+		return this;
+	}
+	
+	/**
+	 * Finds the index of the passed address in the slots of the referenced AllocationPointer
+	 * @param addressToFind The address to find the index for
+	 * @return the index of the passed address, or -1 if the address was not found
+	 */
+	public final int findIndexForAddress(final long addressToFind) {
+		return AllocationPointerOperations.findIndexForAddress(address, addressToFind);
+	}
+	
+	
 	
 	/**
 	 * Assigns the passed address to the next available slot
@@ -127,6 +156,24 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	@Override
 	public final void setAllocated(final long address, final long size, final long alignmentOverhead) {
 		assignSlot(address, size, alignmentOverhead);		
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.AddressAssignable#removeAllocated(long)
+	 */
+	@Override
+	public final void removeAllocated(final long addressToRemove) {
+		AllocationPointerOperations.clearAddress(address, findIndexForAddress(addressToRemove));
+	}
+	
+	
+	/**
+	 * Clears the address at the specified index
+	 * @param index the index of the AllocationPointer's address slot to clear
+	 */
+	public final void clearAddress(final int index) {
+		AllocationPointerOperations.clearAddress(address, index);
 	}
 	
 	
@@ -161,17 +208,6 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 */
 	public final void reassignSlot(final int index, final long newAddress) {		
 		AllocationPointerOperations.reassignSlot(address, newAddress, 0L, 0L, index);
-	}
-	
-	
-	/**
-	 * Finds the index of the passed address
-	 * @param addressToFind The address to get the index for
-	 * @return the index of the passed address, or -1 if the address was not found
-	 * TODO: implement hashing function here to speed up finding an address
-	 */
-	private final int findIndexForAddress(final long addressToFind) {
-		return AllocationPointerOperations.findIndexForAddress(address, addressToFind);
 	}
 	
 //	/**
@@ -214,6 +250,7 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	public final boolean isFull() {
 		return AllocationPointerOperations.isFull(address);
 	}
+	
 	
 	/**
 	 * Returns the address at the specified index slot
@@ -307,12 +344,13 @@ public class AllocationPointer implements ReferenceProvider<Object>, AddressAssi
 	 * @param refQueue The reference queue the phantom reference will be registered with
 	 * @return the phantom reference
 	 */
-	public final synchronized PhantomReference<Object> getReference(ReferenceQueue<Object> refQueue) {
+	public final synchronized AllocationPointerPhantomRef getReference(ReferenceQueue<? super AllocationPointer> refQueue) {
 		if(phantomRef==null) {
 			phantomRef = new AllocationPointerPhantomRef(this, address, refQueue);
 	}
 		return phantomRef;
 	}
+
 
 
 

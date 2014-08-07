@@ -101,6 +101,16 @@ public class DefaultAssignableDeAllocateMe implements Deallocatable, AddressAssi
 		// TODO Auto-generated method stub
 		
 	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.AddressAssignable#removeAllocated(long)
+	 */
+	@Override
+	public void removeAllocated(long address) {
+		// TODO Auto-generated method stub
+		
+	}
 	
 
 }
