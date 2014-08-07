@@ -26,6 +26,8 @@ package test.com.heliosapm.unsafe;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
+
 import com.heliosapm.unsafe.AddressAssignable;
 import com.heliosapm.unsafe.Deallocatable;
 
@@ -39,18 +41,16 @@ import com.heliosapm.unsafe.Deallocatable;
 
 public class DefaultAssignableDeAllocateMe implements Deallocatable, AddressAssignable {
 	/** The address slots */
-	private final long[][] addresses;
-	/** the assignment count */
-	private final AtomicInteger assigned = new AtomicInteger(-1);
+	private final NonBlockingHashMapLong<long[]> addresses;
+	/** The refrence id */
+	private long refId = 0;
 	
 	/**
 	 * Creates a new DefaultAssignableDeAllocateMe
 	 * @param addressCount The number of address slots to create
 	 */
 	public DefaultAssignableDeAllocateMe(int addressCount) {
-		addresses = new long[2][];
-		addresses[0] = new long[addressCount];
-		addresses[1] = new long[] {0};
+		addresses = new NonBlockingHashMapLong<long[]>(addressCount);
 	}
 
 	/**
@@ -59,19 +59,16 @@ public class DefaultAssignableDeAllocateMe implements Deallocatable, AddressAssi
 	 */
 	@Override
 	public long[][] getAddresses() {
-		return addresses;
+		long[][] addrs = new long[1][addresses.size()];
+		int cnt = 0;
+		for(Long x: addresses.keySet()) {
+			addrs[0][cnt] = x;
+			cnt++;
+		}
+		return addrs;
 	}
 	
 
-	/**
-	 * Returns the index of the next unallocated address slot
-	 * @return the index of the next unallocated address slot
-	 */
-	public int getNextIndex() {
-		final int index = assigned.incrementAndGet();
-		if(index > addresses[0].length) throw new RuntimeException("Invalid state. Address slots [" + index +  "] are full");
-		return index;
-	}
 
 	/**
 	 * {@inheritDoc}
@@ -79,7 +76,7 @@ public class DefaultAssignableDeAllocateMe implements Deallocatable, AddressAssi
 	 */
 	@Override
 	public long getReferenceId() {
-		return addresses[1][0];
+		return refId;
 	}
 
 	/**
@@ -88,8 +85,7 @@ public class DefaultAssignableDeAllocateMe implements Deallocatable, AddressAssi
 	 */
 	@Override
 	public void setReferenceId(long referenceId) {
-		addresses[1][0] = referenceId;
-		
+		refId = referenceId;		
 	}
 
 	/**
@@ -98,7 +94,7 @@ public class DefaultAssignableDeAllocateMe implements Deallocatable, AddressAssi
 	 */
 	@Override
 	public void setAllocated(long address, long size, long alignmentOverhead) {
-		// TODO Auto-generated method stub
+		addresses.put(address, new long[]{size, alignmentOverhead});
 		
 	}
 
@@ -108,7 +104,7 @@ public class DefaultAssignableDeAllocateMe implements Deallocatable, AddressAssi
 	 */
 	@Override
 	public void removeAllocated(long address) {
-		// TODO Auto-generated method stub
+		addresses.remove(address);
 		
 	}
 	
