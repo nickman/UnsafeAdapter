@@ -1089,9 +1089,12 @@ public class DefaultUnsafeAdapterImpl implements DefaultUnsafeAdapterImplMBean {
 		map.put(ALLOC_OVER, getAlignedMemoryOverhead());
 		map.put(ALLOC_MEMK, getTotalAllocatedMemoryKb());
 		map.put(ALLOC_MEMM, getTotalAllocatedMemoryMb());
-		map.put(ALLOC_COUNT, (long)getTotalAllocationCount());
+		map.put(ALLOC_COUNT, getTotalAllocationCount());
 		map.put(REFQ_SIZE, getRefQueuePending());    		
 		map.put(PENDING_COUNT, (long)getPendingRefs());
+		map.put(CLEARED_COUNT, getTotalClearedAllocations());
+		map.put(RAW_COUNT, (long)getTotalRawAllocationCount());
+		
 		return map;
 	}
 
@@ -1102,6 +1105,15 @@ public class DefaultUnsafeAdapterImpl implements DefaultUnsafeAdapterImplMBean {
 	@Override
 	public long getTotalAllocatedMemory() {
 		return refMgr.getTotalMemoryAllocated();
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#getTotalClearedAllocations()
+	 */
+	@Override
+	public long getTotalClearedAllocations() {
+		return refMgr.getTotalClearedAllocations();
 	}
 
 	/**
@@ -1158,6 +1170,15 @@ public class DefaultUnsafeAdapterImpl implements DefaultUnsafeAdapterImplMBean {
 	@Override
 	public long getTotalAllocationCount() {
 		return refMgr.getTotalAllocationCount();
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @see com.heliosapm.unsafe.MemoryMBean#getTotalRawAllocationCount()
+	 */
+	@Override
+	public final int getTotalRawAllocationCount() {
+		return refMgr.getTotalRawAllocationCount();
 	}
 
 	/**

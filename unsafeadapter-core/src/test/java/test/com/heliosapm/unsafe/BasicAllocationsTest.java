@@ -26,6 +26,9 @@ package test.com.heliosapm.unsafe;
 
 
 
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -43,7 +46,11 @@ import com.heliosapm.unsafe.UnsafeAdapter;
 @SuppressWarnings("restriction")
 @UnsafeAdapterConfiguration()
 public class BasicAllocationsTest extends BaseTest {
+	/** Keeps a count of raw (unmanaged) memory allocations through UnsafeAdapter */
+	protected final AtomicInteger rawAllocations = new AtomicInteger(0);
 	
+	/** A snapshot of the raw allocation count so we can verify it */
+	protected int rawCount = -1;
 	/**
 	 * Initializes the config and creates a new AllocationReferenceManager in accordance.
 	 */
@@ -54,7 +61,17 @@ public class BasicAllocationsTest extends BaseTest {
 		}
 	}
 	
-
+	/**
+	 * Validates the raw allocation count in the ref mgr
+	 */
+	@After
+	public void afterTest() {
+		if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+			Assert.assertEquals("Total Raw Allocations was unexpected. --> ", 0, UnsafeAdapter.getMemoryMBean().getTotalRawAllocationCount());			
+		} else {
+			Assert.assertEquals("Total Raw Allocations was unexpected. --> ", -1, UnsafeAdapter.getMemoryMBean().getTotalRawAllocationCount());
+		}
+	}
 
 	/**
 	 * Tests a long allocation, write, read and deallocation
@@ -63,6 +80,7 @@ public class BasicAllocationsTest extends BaseTest {
 	@Test
 	public void testAllocatedLong() throws Exception {
 		final long address = UnsafeAdapter.allocateMemory(8);
+		rawCount = rawAllocations.incrementAndGet();
 		try {
 			long value = nextPosLong();
 			UnsafeAdapter.putLong(address, value);
@@ -90,6 +108,7 @@ public class BasicAllocationsTest extends BaseTest {
 	    @Test
 	    public void testAllocatedInteger() throws Exception {
 	        final long address = UnsafeAdapter.allocateMemory(4);
+	        rawCount = rawAllocations.incrementAndGet();
 	        try {
 	            int value = nextPosInteger();
 	            UnsafeAdapter.putInt(address, value);
@@ -102,6 +121,7 @@ public class BasicAllocationsTest extends BaseTest {
 	            validateAllocated(4, -1);	            
 	        } finally {
 	            UnsafeAdapter.freeMemory(address);
+	            rawCount = rawAllocations.decrementAndGet();
 	            validateDeallocated(0, -1);
 	        }
 	    }
@@ -115,6 +135,7 @@ public class BasicAllocationsTest extends BaseTest {
 	    @Test
 	    public void testAllocatedFloat() throws Exception {
 	        final long address = UnsafeAdapter.allocateMemory(4);
+	        rawCount = rawAllocations.incrementAndGet();
 	        try {
 	            float value = nextPosFloat();
 	            UnsafeAdapter.putFloat(address, value);
@@ -128,6 +149,7 @@ public class BasicAllocationsTest extends BaseTest {
 	            validateAllocated(4, -1);	            
 	        } finally {
 	            UnsafeAdapter.freeMemory(address);
+	            rawCount = rawAllocations.decrementAndGet();
 	            validateDeallocated(0, -1);	            
 	        }
 	    }
@@ -141,6 +163,7 @@ public class BasicAllocationsTest extends BaseTest {
 	    @Test
 	    public void testAllocatedDouble() throws Exception {
 	        final long address = UnsafeAdapter.allocateMemory(8);
+	        rawCount = rawAllocations.incrementAndGet();
 	        try {
 	            double value = nextPosDouble();
 	            UnsafeAdapter.putDouble(address, value);
@@ -166,6 +189,7 @@ public class BasicAllocationsTest extends BaseTest {
 	    @Test
 	    public void testAllocatedShort() throws Exception {
 	        final long address = UnsafeAdapter.allocateMemory(2);
+	        rawCount = rawAllocations.incrementAndGet();
 	        try {
 	            short value = nextPosShort();
 	            UnsafeAdapter.putShort(address, value);
@@ -178,6 +202,7 @@ public class BasicAllocationsTest extends BaseTest {
 	            validateAllocated(2, -1);	            
 	        } finally {
 	            UnsafeAdapter.freeMemory(address);
+	            rawCount = rawAllocations.decrementAndGet();
 	            validateDeallocated(0, -1);
 	        }
 	    }
@@ -190,6 +215,7 @@ public class BasicAllocationsTest extends BaseTest {
 	    @Test
 	    public void testAllocatedByte() throws Exception {
 	        final long address = UnsafeAdapter.allocateMemory(1);
+	        rawCount = rawAllocations.incrementAndGet();
 	        try {
 	            byte value = nextPosByte();
 	            UnsafeAdapter.putByte(address, value);
@@ -202,6 +228,7 @@ public class BasicAllocationsTest extends BaseTest {
 	            validateAllocated(1, -1);	            
 	        } finally {
 	            UnsafeAdapter.freeMemory(address);
+	            rawCount = rawAllocations.decrementAndGet();
 	            validateDeallocated(0, -1);
 	        }
 	    }
@@ -215,6 +242,7 @@ public class BasicAllocationsTest extends BaseTest {
 	    @Test
 	    public void testAllocatedBoolean() throws Exception {
 	        final long address = UnsafeAdapter.allocateMemory(1);
+	        rawCount = rawAllocations.incrementAndGet();
 	        try {
 	            boolean value = nextBoolean();
 	            UnsafeAdapter.putBoolean(address, value);
@@ -227,6 +255,7 @@ public class BasicAllocationsTest extends BaseTest {
 	            validateAllocated(1, -1);	
 	        } finally {
 	            UnsafeAdapter.freeMemory(address);
+	            rawCount = rawAllocations.decrementAndGet();
 	            validateDeallocated(0, -1);
 	        }
 	    }
@@ -240,6 +269,7 @@ public class BasicAllocationsTest extends BaseTest {
 	    @Test
 	    public void testAllocatedCharacter() throws Exception {
 	        final long address = UnsafeAdapter.allocateMemory(2);
+	        rawCount = rawAllocations.incrementAndGet();
 	        try {
 	            char value = nextCharacter();
 	            UnsafeAdapter.putChar(address, value);
@@ -252,6 +282,7 @@ public class BasicAllocationsTest extends BaseTest {
 	            validateAllocated(2, -1);		            
 	        } finally {
 	            UnsafeAdapter.freeMemory(address);
+	            rawCount = rawAllocations.decrementAndGet();
 	            validateDeallocated(0, -1);
 	        }
 	    }
@@ -266,6 +297,7 @@ public class BasicAllocationsTest extends BaseTest {
 			long address = -1;
 			try {
 				address = UnsafeAdapter.allocateMemory(8);
+				rawCount = rawAllocations.incrementAndGet();
 				long value = nextPosLong();
 				long nextValue = nextPosLong();
 				UnsafeAdapter.putLong(address, value);
@@ -295,6 +327,7 @@ public class BasicAllocationsTest extends BaseTest {
             long address = -1;
             try {
                 address = UnsafeAdapter.allocateMemory(4);
+                rawCount = rawAllocations.incrementAndGet();
                 int value = nextPosInteger();
                 int nextValue = nextPosInteger();
                 UnsafeAdapter.putInt(address, value);
@@ -310,6 +343,7 @@ public class BasicAllocationsTest extends BaseTest {
                 validateAllocated(4*2, -1);
             } finally {
                 if(address!=-1) UnsafeAdapter.freeMemory(address);
+                rawCount = rawAllocations.decrementAndGet();
                 validateDeallocated(0, -1);
             }
         }
@@ -324,7 +358,8 @@ public class BasicAllocationsTest extends BaseTest {
         public void testReallocatedByte() throws Exception {
             long address = -1;
             try {
-                address = UnsafeAdapter.allocateMemory(1);                
+                address = UnsafeAdapter.allocateMemory(1);    
+                rawCount = rawAllocations.incrementAndGet();
                 byte value = nextPosByte();
                 byte nextValue = nextPosByte();
                 UnsafeAdapter.putByte(address, value);
@@ -340,6 +375,7 @@ public class BasicAllocationsTest extends BaseTest {
                 validateAllocated(1*2, -1);
             } finally {
                 if(address!=-1) UnsafeAdapter.freeMemory(address);
+                rawCount = rawAllocations.decrementAndGet();
                 validateDeallocated(0, -1);
             }
         }
@@ -354,6 +390,7 @@ public class BasicAllocationsTest extends BaseTest {
             long address = -1;
             try {
                 address = UnsafeAdapter.allocateMemory(1);
+                rawCount = rawAllocations.incrementAndGet();
                 boolean value = nextBoolean();
                 boolean nextValue = nextBoolean();
                 UnsafeAdapter.putBoolean(address, value);
@@ -369,6 +406,7 @@ public class BasicAllocationsTest extends BaseTest {
                 validateAllocated(1*2, -1);                
             } finally {
                 if(address!=-1) UnsafeAdapter.freeMemory(address);
+                rawCount = rawAllocations.decrementAndGet();
                 validateDeallocated(0, -1);
             }
         }
@@ -383,6 +421,7 @@ public class BasicAllocationsTest extends BaseTest {
             long address = -1;
             try {
                 address = UnsafeAdapter.allocateMemory(2);
+                rawCount = rawAllocations.incrementAndGet();
                 char value = nextCharacter();
                 char nextValue = nextCharacter();
                 UnsafeAdapter.putChar(address, value);
@@ -398,6 +437,7 @@ public class BasicAllocationsTest extends BaseTest {
                 validateAllocated(2*2, -1);                
             } finally {
                 if(address!=-1) UnsafeAdapter.freeMemory(address);
+                rawCount = rawAllocations.decrementAndGet();
                 validateDeallocated(0, -1);
             }
         }
@@ -412,6 +452,7 @@ public class BasicAllocationsTest extends BaseTest {
             long address = -1;
             try {
                 address = UnsafeAdapter.allocateMemory(2);
+                rawCount = rawAllocations.incrementAndGet();
                 short value = nextPosShort();
                 short nextValue = nextPosShort();
                 UnsafeAdapter.putShort(address, value);
@@ -427,6 +468,7 @@ public class BasicAllocationsTest extends BaseTest {
                 validateAllocated(2*2, -1);                
             } finally {
                 if(address!=-1) UnsafeAdapter.freeMemory(address);
+                rawCount = rawAllocations.decrementAndGet();
                 validateDeallocated(0, -1);
             }
         }
@@ -441,6 +483,7 @@ public class BasicAllocationsTest extends BaseTest {
             long address = -1;
             try {
                 address = UnsafeAdapter.allocateMemory(4);
+                rawCount = rawAllocations.incrementAndGet();
                 float value = nextPosFloat();
                 float nextValue = nextPosFloat();
                 UnsafeAdapter.putFloat(address, value);
@@ -456,6 +499,7 @@ public class BasicAllocationsTest extends BaseTest {
                 validateAllocated(4*2, -1);
             } finally {
                 if(address!=-1) UnsafeAdapter.freeMemory(address);
+                rawCount = rawAllocations.decrementAndGet();
                 validateDeallocated(0, -1);
             }
         }
@@ -467,9 +511,10 @@ public class BasicAllocationsTest extends BaseTest {
          */
         @Test
         public void testReallocatedDouble() throws Exception {
-            long address = -1;
+            long address = -1;            
             try {
-                address = UnsafeAdapter.allocateMemory(8);
+                address = UnsafeAdapter.allocateMemory(8);                
+                rawCount = rawAllocations.incrementAndGet();
                 double value = nextPosDouble();
                 double nextValue = nextPosDouble();
                 UnsafeAdapter.putDouble(address, value);
@@ -485,6 +530,7 @@ public class BasicAllocationsTest extends BaseTest {
                 validateAllocated(8*2, -1);                
             } finally {
                 if(address!=-1) UnsafeAdapter.freeMemory(address);
+                rawCount = rawAllocations.decrementAndGet();
                 validateDeallocated(0, -1);
             }
         }

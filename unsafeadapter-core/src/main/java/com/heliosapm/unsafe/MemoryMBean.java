@@ -23,10 +23,17 @@ public interface MemoryMBean {
 	public static final String ALLOC_COUNT = "Allocations";
 	/** The map key for the pending phantom references */
 	public static final String PENDING_COUNT = "Pending";
+	/** The map key for the pending raw references */
+	public static final String RAW_COUNT = "RawPending";
+	
 	/** The map key for the total memory alignedment overhead in bytes */
 	public static final String ALLOC_OVER = "AllocationOverhead";
 	/** The map key for the reference queue size */
 	public static final String REFQ_SIZE= "RefQSize";
+	/** The map key for the total number of cleared references */
+	public static final String CLEARED_COUNT= "Cleared";
+	
+	
 	
 	/**
 	 * Indicates if the safe memory adapter is enabled
@@ -83,6 +90,12 @@ public interface MemoryMBean {
 	public long getTotalAllocatedMemory();
 	
 	/**
+	 * Returns the total number of cleared allocation references
+	 * @return the total number of cleared allocation references
+	 */
+	public long getTotalClearedAllocations();	
+	
+	/**
 	 * Returns the total aligned memory overhead in bytes
 	 * @return the total aligned memory overhead in bytes
 	 */
@@ -106,6 +119,12 @@ public interface MemoryMBean {
 	 * @return the total number of existing allocations
 	 */
 	public long getTotalAllocationCount();
+	
+	/**
+	 * Returns the total number of tracked raw allocations (i.e. where no memory manager was provided to auto clear)
+	 * @return the total number of tracked raw allocations
+	 */
+	public int getTotalRawAllocationCount();
 	    	
 	/**
 	 * Returns the number of retained phantom references to memory allocations

@@ -25,7 +25,6 @@
 package com.heliosapm.unsafe;
 
 import java.lang.reflect.Field;
-import java.util.Enumeration;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
@@ -309,6 +308,9 @@ public class AllocationPointerOperations {
 				//$FALL-THROUGH$
 			case 1:
 				dimAddresses[ZERO_BYTE] = getAddressOfDim(address, ZERO_BYTE);
+				break;
+			default:
+				loge("Invalid AP Dimension: [%s]", dim);
 		}
 		return dimAddresses;
 	}
@@ -353,20 +355,30 @@ public class AllocationPointerOperations {
 	 *  <li>Address management with memory tracking</li>
 	 *  <li>Address management with memory tracking and cache-line alignment overhead</li>
 	 * </ol>
-	 * @param address The address of the AllocationPointer
+	 * @param rootAddress The root address of the AllocationPointer
 	 * @return the dimension of the AllocationPointer
 	 */
-	public static final byte getDimension(final long address) {
-		return unsafe.getByte(getAddressOfDim(address, ZERO_BYTE) + DIM_OFFSET);
+	public static final byte getDimension(final long rootAddress) {
+		return unsafe.getByte(getAddressOfDim(rootAddress, ZERO_BYTE) + DIM_OFFSET);
 	}
 	/**
 	 * Returns the reference id of the referenced AllocationPointer
-	 * @param address The address of the AllocationPointer
+	 * @param rootAddress The root address of the AllocationPointer
 	 * @return the reference id of the AllocationPointer
 	 */
-	public static final long getReferenceId(final long address) {
-		return unsafe.getLong(getAddressOfDim(address, ZERO_BYTE) + REFID_OFFSET);
+	public static final long getReferenceId(final long rootAddress) {
+		return unsafe.getLong(getAddressOfDim(rootAddress, ZERO_BYTE) + REFID_OFFSET);
 	}
+	
+	/**
+	 * Sets the reference id of the referenced AllocationPointer
+	 * @param rootAddress The root address of the AllocationPointer
+	 * @param newRefId The ref id to set the reference to
+	 */
+	private static final void setReferenceId(final long rootAddress, final long newRefId) {
+		unsafe.putLong(getAddressOfDim(rootAddress, ZERO_BYTE) + REFID_OFFSET, newRefId);
+	}
+	
 	
 //	/**
 //	 * Assigns the passed address to the next available slot in the referenced AllocationPointerOperations
@@ -384,52 +396,43 @@ public class AllocationPointerOperations {
 	
 	/**
 	 * Finds the index of the passed address in the slots of the referenced AllocationPointer
-	 * @param address The address of the AllocationPointer
+	 * @param rootAddress The root address of the AllocationPointer
 	 * @param addressToFind The address to find the index for
 	 * @return the index of the passed address, or -1 if the address was not found
 	 * TODO: implement hashing function here to speed up finding an address
 	 */
-	public static final int findIndexForAddress(final long address, final long addressToFind) {
-		final long za = getAddressOfDim(address, ZERO_BYTE);
-		final int sz = getSize(za);
-		
+	public static final int findIndexForAddress(final long rootAddress, final long addressToFind) {		
+		final int sz = getSize(rootAddress);
+		if(sz==0) return -1;
 		long indexedValue = -1;
 		for(int i = 0; i < sz; i++) {
-			indexedValue = AllocationPointerOperations.getAddress(za, i);
+			indexedValue = AllocationPointerOperations.getAddress(rootAddress, i);
 			if(addressToFind==indexedValue) return i;
 		}
 		return -1;
 	}
 	
 	
-//	private static final long assignSlot(final long address, final long newAddress, final byte dim) {
-//		return assignSlot(new long[]{address}, newAddress, 0L, 0L);
-//	}
-	
-	
 	/**
 	 * Assigns the passed address to the next available slot in the referenced AllocationPointer
-	 * @param address The address array of athe allocation pointer memory block which could be a length of:<ol>
-	 * 	<li>Simple address management</li>
-	 *  <li>Address management with memory tracking</li>
-	 *  <li>Address management with memory tracking and cache-line alignment overhead</li>
-	 * </ol>
+	 * @param rootAddress The root address of the AllocationPointer
 	 * @param newAddress The address to assign to the next slot
 	 * @param size The size of the memory block that the newAddress points to
 	 * @param alignmentOverhead the cache-line memory alignment overhead of the memory block that the newAddress points to
 	 */
-	public static final void assignSlot(final long address, final long newAddress, final long size, final long alignmentOverhead) {		
-		final byte dim = getDimension(address);
-		if(isFull(address)) {			
-			extend(address);
+	public static final void assignSlot(final long rootAddress, final long newAddress, final long size, final long alignmentOverhead) {		
+		final byte dim = getDimension(rootAddress);
+		if(isFull(rootAddress)) {			
+			extend(rootAddress);
 		}
-		final int nextIndex = incrementSize(address);		
+		if(findIndexForAddress(rootAddress, newAddress)!=-1) return;
+		final int nextIndex = incrementSize(rootAddress);		
 		final long offset = HEADER_SIZE + (nextIndex * ADDRESS_SIZE);
-		put(address, ZERO_BYTE, offset, newAddress);
+		put(rootAddress, ZERO_BYTE, offset, newAddress);
 		if(dim>1) {
-			put(address, ONE_BYTE, offset, size);
+			put(rootAddress, ONE_BYTE, offset, size);
 			if(dim>2) {
-				put(address, TWO_BYTE, offset, alignmentOverhead);
+				put(rootAddress, TWO_BYTE, offset, alignmentOverhead);
 			}
 		}
 	}
@@ -511,6 +514,28 @@ public class AllocationPointerOperations {
 	public static final int getCapacity(final long address) {
 		return unsafe.getInt(getAddressOfDim(address, ZERO_BYTE));
 	}
+	
+	// =================================================================================================
+	// Attached / Dettached Management
+	// =================================================================================================
+	
+	/**
+	 * Indicates if the referenced AllocationPointer is attached
+	 * @param rootAddress The root address of the AllocationPointer 
+	 * @return true if the referenced AllocationPointer is attached, false otherwise
+	 */
+	public static final boolean isAttached(long rootAddress) {
+		return getReferenceId(rootAddress) > 0;
+	}
+	
+	/**
+	 * Marks the referenced AllocationPointer as attached
+	 * @param rootAddress the root address of the AllocationPointer 
+	 */
+	public static final void setAttached(long rootAddress) {
+		setReferenceId(rootAddress, Math.abs(getReferenceId(rootAddress)));
+	}
+	
 	
 	/**
 	 * Returns the index of the most recently assigned address slot, or -1 if none are assigned
@@ -734,43 +759,22 @@ public class AllocationPointerOperations {
 	
 	/**
 	 * Prints the summary state of an AllocationPointer
-	 * @param address The address array of the allocation pointer memory block which could be a length of:<ol>
-	 * 	<li>Simple address management</li>
-	 *  <li>Address management with memory tracking</li>
-	 *  <li>Address management with memory tracking and cache-line alignment overhead</li>
-	 * </ol>
+	 * @param rootAddress of this AllocationPointer
 	 * @return a string describing the status of the AllocationPointer
 	 */
-	public static final String print(final long address) {
-		StringBuilder b = new StringBuilder(String.format("AllocationPointer >> [size: %s, capacity: %s, byteSize: %s]", getSize(address), getCapacity(address), getEndOffset(address)));
+	public static final String print(final long rootAddress) {
+		StringBuilder b = new StringBuilder(String.format("AllocationPointer >> [size: %s, capacity: %s, byteSize: %s, attached: %s]", getSize(rootAddress), getCapacity(rootAddress), getEndOffset(rootAddress), isAttached(rootAddress)));
 		return b.toString();
 	}
 	
 	/**
 	 * Prints the detailed state of an AllocationPointer
-	 * @param address The address array of the allocation pointer memory block which could be a length of:<ol>
-	 * 	<li>Simple address management</li>
-	 *  <li>Address management with memory tracking</li>
-	 *  <li>Address management with memory tracking and cache-line alignment overhead</li>
-	 * </ol>
+	 * @param rootAddress of this AllocationPointer
 	 * @return a string describing the details of the AllocationPointer
 	 * FIXME: implement this
 	 */
-	public static final String dump(final long address) {
-		
-//		final byte dim = getDimension(address[0]);		
-		StringBuilder b = new StringBuilder();
-//		b.append("\n\tAddresses: [");
-//		final int size = getSize(address);
-//		if(size>0) {
-//			for(int i = 0; i < size; i++) {
-//				b.append(getAddress(address, i)).append(", ");
-//			}			
-//			b.deleteCharAt(b.length()-1);
-//			b.deleteCharAt(b.length()-1);
-//		}
-//		return b.append("]").toString();
-		return b.toString();
+	public static final String dump(final long rootAddress) {
+		return print(rootAddress);
 	}
 	
 	/** Empty long arr const */
@@ -781,55 +785,48 @@ public class AllocationPointerOperations {
 	/**
 	 * Frees all memory allocated within the referenced AllocationPointerOperations.
 	 * No includePostMortem is returned.
-	 * @param address The address array of the allocation pointer memory block which could be a length of:<ol>
-	 * 	<li>Simple address management</li>
-	 *  <li>Address management with memory tracking</li>
-	 *  <li>Address management with memory tracking and cache-line alignment overhead</li>
-	 * </ol>
+	 * @param rootAddress of this AllocationPointer
 	 */
-	public static final void free(final long address) {
-		free(address, false);
+	public static final void free(final long rootAddress) {
+		free(rootAddress, false);
 	}
 
 	
 	/**
 	 * Frees all memory allocated within the referenced AllocationPointerOperations
-	 * @param address The address array of the allocation pointer memory block which could be a length of:<ol>
-	 * 	<li>Simple address management</li>
-	 *  <li>Address management with memory tracking</li>
-	 *  <li>Address management with memory tracking and cache-line alignment overhead</li>
-	 * </ol>
+	 * @param rootAddress of this AllocationPointer
 	 * @param includePostMortem If true, the returned array will have all the formerly allocated addresses,
 	 * otherwise will be zero length.
 	 * @return The [possibly empty] array of addresses just deallocated
 	 */
-	public static final long[][] free(final long address, final boolean includePostMortem) {
+	public static final long[][] free(final long rootAddress, final boolean includePostMortem) {
 //		log("Starting full AP Free for root address [%s]", address);
-		final byte dim = getDimension(address);				
-		final int size = getSize(address);
+		final byte dim = getDimension(rootAddress);				
+		final int size = getSize(rootAddress);
+		final boolean dettached = !isAttached(rootAddress);
 		long[][] deadAddresses = includePostMortem ? size>0 ? new long[size][dim] : EMPTY_DLONG_ARR : EMPTY_DLONG_ARR;
 		if(size>0) {
 			if(includePostMortem) {
 				for(int i = 0; i < size; i++) {
-					long[] triplet = getSizedTriplet(address, i);
+					long[] triplet = getSizedTriplet(rootAddress, i);
 					deadAddresses[i] = triplet;
 					if(triplet[0]>0) {
-						_freeMemory(triplet[0]);						
+						if(dettached) _freeMemory(triplet[0]);						
 					}
 				}				
 			} else {
 				for(int i = 0; i < size; i++) {
-					long addr = getAddress(address, i);
+					long addr = getAddress(rootAddress, i);
 					if(addr>0) {
-						_freeMemory(addr);
+						if(dettached) _freeMemory(addr);
 					}
 				}
 			}
 		}
-		for(final long dimAddress : getDimAddresses(address)) {
+		for(final long dimAddress : getDimAddresses(rootAddress)) {
 			_freeMemory(dimAddress);
 		}
-		_freeMemory(address);
+		_freeMemory(rootAddress);
 		return deadAddresses;
 	}
 	

@@ -210,13 +210,20 @@ public class AllocationPointer implements ReferenceProvider<AllocationPointer>, 
 		AllocationPointerOperations.reassignSlot(address, newAddress, 0L, 0L, index);
 	}
 	
-//	/**
-//	 * Returns the slotted keyAddresses as a {@link Deallocatable} array of longs
-//	 * @return an array of keyAddresses
-//	 */
-//	public final long[][] getAddresses() {
-//		return address;
-//	}
+	/**
+	 * Indicates if this AllocationPointer is attached
+	 * @return true if this AllocationPointer is attached, false otherwise
+	 */
+	public final boolean isAttached() {
+		return AllocationPointerOperations.isAttached(address);
+	}
+	
+	/**
+	 * Marks this AllocationPointer as attached
+	 */
+	public final void setAttached() {
+		AllocationPointerOperations.setAttached(address);
+	}
 	
 	/**
 	 * Returns the number of populated address slots 

@@ -70,6 +70,31 @@ class AllocationPointerPhantomRef extends PhantomReference<AllocationPointer> im
 	}
 	
 	/**
+	 * Indicates if the referenced AllocationPointer is attached
+	 * @return true if the referenced AllocationPointer is attached or has been cleared
+	 */
+	public boolean isAttached() {
+		if(address==0) return false;
+		return AllocationPointerOperations.isAttached(address);
+	}
+	
+	/**
+	 * Marks the referenced AllocationPointer as attached
+	 */
+	public void setAttached() {
+		if(address!=0) AllocationPointerOperations.setAttached(address);
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 * @see java.lang.Object#toString()
+	 */
+	public String toString() {
+		if(clearedAddresses!=null) return String.format("AllocationPointerPhantomRef %s", Arrays.deepToString(clearedAddresses));
+		return "AllocationPointerPhantomRef []";
+	}
+	
+	/**
 	 * Returns the UnsafeAdapter provided reference id
 	 * @return the UnsafeAdapter provided reference id
 	 */
@@ -81,7 +106,7 @@ class AllocationPointerPhantomRef extends PhantomReference<AllocationPointer> im
 	 * Returns the cleared addresses (and possibly the memory allocation sizes and alignment overheads)</li>
 	 * @return the cleared addresses
 	 */
-	public long[][] getClearedAddresses() {
+	public long[][] getClearedAddresses() {		
 		return clearedAddresses;
 	}
 	
@@ -91,6 +116,7 @@ class AllocationPointerPhantomRef extends PhantomReference<AllocationPointer> im
 	 * @see java.lang.ref.Reference#clear()
 	 */
 	public void clear() {
+		System.out.println("CLEARING PHANTOM...");
 		if(address > 0) {
 			clearedAddresses = AllocationPointerOperations.free(address, true);
 			Arrays.sort(clearedAddresses, CSORT);

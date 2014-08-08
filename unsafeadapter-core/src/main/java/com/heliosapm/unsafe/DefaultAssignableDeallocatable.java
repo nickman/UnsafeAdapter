@@ -22,14 +22,10 @@
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org. 
  *
  */
-package test.com.heliosapm.unsafe;
-
-import java.util.concurrent.atomic.AtomicInteger;
+package com.heliosapm.unsafe;
 
 import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
-
-import com.heliosapm.unsafe.AddressAssignable;
-import com.heliosapm.unsafe.Deallocatable;
+import org.cliffc.high_scale_lib.NonBlockingHashMapLong.IteratorLong;
 
 /**
  * <p>Title: DefaultAssignableDeAllocateMe</p>
@@ -39,7 +35,7 @@ import com.heliosapm.unsafe.Deallocatable;
  * <p><code>test.com.heliosapm.unsafe.DefaultAssignableDeAllocateMe</code></p>
  */
 
-public class DefaultAssignableDeAllocateMe implements Deallocatable, AddressAssignable {
+public class DefaultAssignableDeallocatable implements Deallocatable, AddressAssignable {
 	/** The address slots */
 	private final NonBlockingHashMapLong<long[]> addresses;
 	/** The refrence id */
@@ -49,7 +45,7 @@ public class DefaultAssignableDeAllocateMe implements Deallocatable, AddressAssi
 	 * Creates a new DefaultAssignableDeAllocateMe
 	 * @param addressCount The number of address slots to create
 	 */
-	public DefaultAssignableDeAllocateMe(int addressCount) {
+	public DefaultAssignableDeallocatable(int addressCount) {
 		addresses = new NonBlockingHashMapLong<long[]>(addressCount);
 	}
 
@@ -57,12 +53,14 @@ public class DefaultAssignableDeAllocateMe implements Deallocatable, AddressAssi
 	 * {@inheritDoc}
 	 * @see com.heliosapm.unsafe.Deallocatable#getAddresses()
 	 */
+	@SuppressWarnings("rawtypes")
 	@Override
 	public long[][] getAddresses() {
 		long[][] addrs = new long[1][addresses.size()];
 		int cnt = 0;
-		for(Long x: addresses.keySet()) {
-			addrs[0][cnt] = x;
+		IteratorLong li = (IteratorLong)addresses.keySet().iterator();
+		while(li.hasMoreElements()) {
+			addrs[0][cnt] = li.nextLong();
 			cnt++;
 		}
 		return addrs;

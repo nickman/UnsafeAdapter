@@ -26,9 +26,15 @@ package com.heliosapm.unsafe;
 
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
+import java.lang.reflect.Field;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicLong;
 
+import jsr166e.LongAdder;
+
 import org.cliffc.high_scale_lib.NonBlockingHashMapLong;
+
+import sun.misc.Unsafe;
 
 import com.heliosapm.unsafe.ReflectionHelper.ReferenceQueueLengthReader;
 
@@ -41,6 +47,20 @@ import com.heliosapm.unsafe.ReflectionHelper.ReferenceQueueLengthReader;
  */
 
 public class AllocationReferenceManager implements Runnable {
+	
+    /** The unsafe instance */    
+	static final Unsafe unsafe;
+
+	static {
+		try {
+            Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+            theUnsafe.setAccessible(true);
+            unsafe = (Unsafe) theUnsafe.get(null);			
+		} catch (Exception ex) {
+			throw new RuntimeException("Failed to access sun.misc.Unsafe.theUnsafe", ex);
+		}		
+	}
+	
 	/** Indicates if memory allocation tracking is enabled */
 	private final boolean memTracking;
 	/** Indicates if cache-line memory alignment is enabled */
@@ -64,11 +84,11 @@ public class AllocationReferenceManager implements Runnable {
 	//  Aggregate Allocation Tracking
 	// =========================================================		
 	/** The total native memory allocation */
-	final AtomicLong totalMemoryAllocated;
+	final LongAdder totalMemoryAllocated;
 	/** The total number of native memory allocations */
-	final AtomicLong totalAllocationCount;
+	final LongAdder totalAllocationCount;
 	/** The total native memory allocation overhead for alignment */
-	final AtomicLong totalAlignmentOverhead;
+	final LongAdder totalAlignmentOverhead;
 	
 	// =========================================================
 	//  Auto Deallocation
@@ -81,6 +101,8 @@ public class AllocationReferenceManager implements Runnable {
 	final Thread cleanerThread;
 	/** Serial number factory for cleaner threads */
 	private static final AtomicLong cleanerSerial = new AtomicLong(0L);
+	/** The total number of cleared references */
+	final LongAdder refsCleared = new LongAdder();
 	
 	/**
 	 * <b>TEST HOOK ONLY !</b>
@@ -88,9 +110,10 @@ public class AllocationReferenceManager implements Runnable {
 	 */
 	@SuppressWarnings("unused")
 	private final void reset() {
-		if(totalMemoryAllocated!=null) totalMemoryAllocated.set(0L);
-		if(totalAllocationCount!=null) totalAllocationCount.set(0L);
-		if(totalAlignmentOverhead!=null) totalAlignmentOverhead.set(0L);
+		refsCleared.reset();
+		if(totalMemoryAllocated!=null) totalMemoryAllocated.reset();
+		if(totalAllocationCount!=null) totalAllocationCount.reset();
+		if(totalAlignmentOverhead!=null) totalAlignmentOverhead.reset();
 		if(trackedRaw!=null) trackedRaw.clear();
 		if(trackedRefs!=null) trackedRefs.clear();
 	}
@@ -105,9 +128,9 @@ public class AllocationReferenceManager implements Runnable {
 		this.memTracking = memTracking;
 		this.memAlignment = memAlignment;
 		if(this.memTracking) {
-			totalMemoryAllocated = new AtomicLong();
-			totalAllocationCount = new AtomicLong();
-			totalAlignmentOverhead = new AtomicLong();		
+			totalMemoryAllocated = new LongAdder();
+			totalAllocationCount = new LongAdder();
+			totalAlignmentOverhead = new LongAdder();		
 			trackedRaw = new NonBlockingHashMapLong<long[]>(1024, true);
 		} else {
 			totalMemoryAllocated = null;
@@ -157,28 +180,26 @@ public class AllocationReferenceManager implements Runnable {
 			try {
 				Reference<?> ref = refQueue.remove(3000);
 				if(ref==null) {
-					System.gc();
+					//System.gc();
 					continue;
 				}
-//				log("Dequeued Reference [%s]", ref);
-				if(ref!=null) { 
-					ref.clear();
-				}
-				if(ref instanceof AllocationPointerPhantomRef) {
-					
-				}
-				if(memTracking && ref instanceof AllocationPointerPhantomRef) {
-//					decrementMemTracking(((AllocationPointerPhantomRef)ref).getClearedAddresses());					
-				} else {
-					if(memTracking && InterfaceTracker.isDeallocatable(ifaceTracker.getMask(ref))) {
-						final long[][] addrs = ((Deallocatable)ref).getAddresses();
-						if(addrs!=null && addrs.length>0) {
-							for(long[] clearedAddresses: addrs) {
-								decrementMemTracking(clearedAddresses);
-							}
-						}
+				log("Dequeued Reference [%s]", ref);
+				if(ref instanceof AllocationPointerPhantomRef) {					
+					AllocationPointerPhantomRef appr = (AllocationPointerPhantomRef)ref;
+					final long refId = appr.getReferenceId();
+					trackedRefs.remove(refId);	
+					appr.clear();
+					log("Dequeued Appr [%s]", ref);
+					long[][] cleared = appr.getClearedAddresses();
+					log("Cleared Appr [%s]", Arrays.deepToString(cleared));
+					if(cleared!=null && cleared.length>0) {
+						long[] totals = decrement(cleared);
+						cleared = null;
+						decrement(totals[0], totals[1]);
 					}
-				}				
+//					ref.clear();
+					refsCleared.increment();
+				}
 				if(terminating) {
 					if(getRefQueuePending()<1 && getPendingRefs()<1 ) break;
 				}
@@ -195,24 +216,6 @@ public class AllocationReferenceManager implements Runnable {
 		
 	}
 	
-	private final void decrementMemTracking(final long...clearedAddresses) {
-		if(clearedAddresses!=null && clearedAddresses.length>0) {
-			for(final long clearedAddress: clearedAddresses) {				
-//				if(!memoryAllocations.contains(clearedAddress)) continue;
-//				final long allocSize = memoryAllocations.remove(clearedAddress);
-//				if(allocSize>0) {
-//					totalMemoryAllocated.addAndGet(allocSize * -1L);
-//					totalAllocationCount.decrementAndGet();
-//					if(memAlignment) {
-//						final long alignOverhead = alignmentOverheads.remove(clearedAddress);
-//						if(alignOverhead>0) {
-//							totalAlignmentOverhead.addAndGet(alignOverhead * -1L);
-//						}
-//					}
-//				}
-			}
-		}
-	}
 	
 	/**
 	 * Increments the memory and overhead counters if enabled in each case
@@ -221,11 +224,11 @@ public class AllocationReferenceManager implements Runnable {
 	 */
 	final void increment(final long size, final long alignmentOverhead) {
 		if(memTracking) {
-			totalMemoryAllocated.addAndGet(size);
-			totalAllocationCount.incrementAndGet();			
+			totalMemoryAllocated.add(size);
+			totalAllocationCount.increment();			
 		}
 		if(memAlignment) {
-			totalAlignmentOverhead.addAndGet(alignmentOverhead);
+			totalAlignmentOverhead.add(alignmentOverhead);
 		}
 	}
 	
@@ -236,14 +239,39 @@ public class AllocationReferenceManager implements Runnable {
 	 */
 	final void decrement(final long size, final long alignmentOverhead) {
 		if(memTracking && size > 0) {
-			totalMemoryAllocated.addAndGet(0-size);
-			totalAllocationCount.decrementAndGet();			
+			totalMemoryAllocated.add(0-size);
+			totalAllocationCount.decrement();			
 		}
 		if(memAlignment && alignmentOverhead > 0) {
-			totalAlignmentOverhead.addAndGet(0-alignmentOverhead);
+			totalAlignmentOverhead.add(0-alignmentOverhead);
 		}
 	}
 	
+	/**
+	 * Executes address freeing, total memory allocation and alignment overhead accounting for gc'ed AllocationPointers
+	 * @param cleared The cleared array from the AllocationPointer phantom reference
+	 * @return a long array with the total allocation and alignment overhead
+	 * FIXME: this can be optimized
+	 */
+	final long[] decrement(final long[][] cleared) {
+		final long[] totals = new long[2];
+		if(cleared!=null && cleared.length>0) {
+			for(long[] triplet: cleared) {
+				long address = triplet[0];
+				if(address>0) {
+					unsafe.freeMemory(address);
+					triplet[0] = 0;
+				}
+				if(memTracking) {
+					totals[0] += triplet[1];
+				}
+				if(memAlignment) {
+					totals[1] += triplet[2];
+				}				
+			}
+		}
+		return totals;
+	}
 	
 	
 	/**
@@ -260,9 +288,6 @@ public class AllocationReferenceManager implements Runnable {
 			if(InterfaceTracker.isAllocationPointer(mask)) {
 				((AllocationPointer)memoryManager).assignSlot(allocatedAddress, size, alignmentOverhead);				
 			} else {
-				if(InterfaceTracker.isAssignable(mask)) {
-					((AddressAssignable)memoryManager).setAllocated(allocatedAddress, size, alignmentOverhead);
-				}
 				if(InterfaceTracker.isDeallocatable(mask)) {
 					Deallocatable dealloc = (Deallocatable)memoryManager;
 					final long refId;
@@ -276,7 +301,10 @@ public class AllocationReferenceManager implements Runnable {
 						if(apRef==null) throw new RuntimeException("Failed to find AllocationPointerPhantomRef for reference id [" + refId + "]");					
 					}
 					apRef.add(allocatedAddress, size, alignmentOverhead);
-				}						
+				}
+				if(InterfaceTracker.isAssignable(mask)) {
+					((AddressAssignable)memoryManager).setAllocated(allocatedAddress, size, alignmentOverhead);
+				}				
 			}
 			increment(size, alignmentOverhead);		
 		} else {
@@ -385,9 +413,9 @@ public class AllocationReferenceManager implements Runnable {
 	 */
 	private final void incrementUnmanaged(final long allocatedAddress, final long size, final long alignmentOverhead) {
 		if(memTracking) {
-			totalAllocationCount.incrementAndGet();
-			totalMemoryAllocated.addAndGet(size);
-			if(memAlignment) totalAlignmentOverhead.addAndGet(alignmentOverhead);
+			totalAllocationCount.increment();
+			totalMemoryAllocated.add(size);
+			if(memAlignment) totalAlignmentOverhead.add(alignmentOverhead);
 			long[] prior = trackedRaw.put(allocatedAddress, memAlignment ? new long[]{size, alignmentOverhead} : new long[]{size});
 			if(prior!=null) {
 				// =======  COLLISION !!!  What do we do with it ?
@@ -460,7 +488,7 @@ public class AllocationReferenceManager implements Runnable {
 	 * @return the the total tracked allocated memory 
 	 */
 	public final long getTotalMemoryAllocated() {
-		return memTracking ? totalMemoryAllocated.get() : -1L;
+		return memTracking ? totalMemoryAllocated.longValue() : -1L;
 	}
 
 
@@ -469,7 +497,24 @@ public class AllocationReferenceManager implements Runnable {
 	 * @return the total number of memory allocations
 	 */
 	public final long getTotalAllocationCount() {
-		return memTracking ? totalAllocationCount.get() : -1L;
+		return memTracking ? totalAllocationCount.longValue() : -1L;
+	}
+	
+	/**
+	 * Returns the total number of tracked raw allocations (i.e. where no memory manager was provided to auto clear)
+	 * @return the total number of tracked raw allocations
+	 */
+	public final int getTotalRawAllocationCount() {
+		return memTracking ? trackedRaw.size() : -1;
+	}
+
+	
+	/**
+	 * Returns the total number of cleared allocation references
+	 * @return the total number of cleared allocation references
+	 */
+	public final long getTotalClearedAllocations() {
+		return refsCleared.longValue();
 	}
 
 
@@ -478,7 +523,7 @@ public class AllocationReferenceManager implements Runnable {
 	 * @return the total cache-line memory alignment overhead
 	 */
 	public final long getTotalAlignmentOverhead() {
-		return memAlignment ? totalAlignmentOverhead.get() : -1L;		
+		return memAlignment ? totalAlignmentOverhead.longValue() : -1L;		
 	}
 
 

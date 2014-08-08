@@ -29,6 +29,7 @@ import org.junit.Ignore;
 import org.junit.Test;
 
 import com.heliosapm.unsafe.AllocationPointer;
+import com.heliosapm.unsafe.DefaultAssignableDeallocatable;
 import com.heliosapm.unsafe.UnsafeAdapter;
 
 /**
@@ -42,32 +43,6 @@ import com.heliosapm.unsafe.UnsafeAdapter;
 @SuppressWarnings("restriction")
 public class AutoDeallocationTest extends BaseTest {
 	
-	@Test
-	@Ignore
-	public void testAllocationPointer() throws Exception {
-		AllocationPointer ap = UnsafeAdapter.newAllocationPointer();
-		try {
-			final int valueCount = Math.abs(RANDOM.nextInt(100)) + 100;
-			final long[] writeValues = new long[valueCount];
-			for(short i = 0; i < writeValues.length; i++) {
-				writeValues[i] = nextPosLong();
-				final long address = UnsafeAdapter.allocateMemory(8, ap);
-				UnsafeAdapter.putLong(address, writeValues[i]);
-			}
-			for(short i = 0; i < writeValues.length; i++) {
-				final long readValue = UnsafeAdapter.getLong(ap.getAddress(i));
-				Assert.assertEquals("Incorrect value at index [" + i + "] ", writeValues[i], readValue);
-			}
-			final long expectedAllocation = ((long)valueCount << 3);
-			validateAllocated(expectedAllocation, -1, valueCount);
-			ap = null;
-			System.gc();
-			sleep(500);
-			validateDeallocated(0, -1L);
-		} finally {
-			if(ap!=null) ap.free();
-		}
-	}
 	
 	/**
 	 * Tests an auto de-allocated long memory allocation 
@@ -75,7 +50,7 @@ public class AutoDeallocationTest extends BaseTest {
 	 */	
 	@Test	
 	public void testAutoClearedAllocatedLong() throws Exception {
-		DefaultAssignableDeAllocateMe dealloc = new DefaultAssignableDeAllocateMe(1); 
+		DefaultAssignableDeallocatable dealloc = new DefaultAssignableDeallocatable(1); 
 		final long address = UnsafeAdapter.allocateMemory(8, dealloc);
 		long value = nextPosLong();
 		UnsafeAdapter.putLong(address, value);
@@ -97,7 +72,7 @@ public class AutoDeallocationTest extends BaseTest {
      */    
     @Test    
     public void testAutoClearedAllocatedBoolean() throws Exception {
-        DefaultAssignableDeAllocateMe dealloc = new DefaultAssignableDeAllocateMe(1); 
+        DefaultAssignableDeallocatable dealloc = new DefaultAssignableDeallocatable(1); 
         final long address = UnsafeAdapter.allocateMemory(1, dealloc);
         boolean value = nextBoolean();
         UnsafeAdapter.putBoolean(address, value);
@@ -121,7 +96,7 @@ public class AutoDeallocationTest extends BaseTest {
     
     @Test    
     public void testAutoClearedAllocatedByte() throws Exception {
-        DefaultAssignableDeAllocateMe dealloc = new DefaultAssignableDeAllocateMe(1); 
+    	DefaultAssignableDeallocatable dealloc = new DefaultAssignableDeallocatable(1); 
         final long address = UnsafeAdapter.allocateMemory(1, dealloc);
         byte value = nextPosByte();
         UnsafeAdapter.putByte(address, value);
@@ -145,7 +120,8 @@ public class AutoDeallocationTest extends BaseTest {
     
     @Test    
     public void testAutoClearedAllocatedCharacter() throws Exception {
-        DefaultAssignableDeAllocateMe dealloc = new DefaultAssignableDeAllocateMe(1); 
+        //DefaultAssignableDeallocatable dealloc = new DefaultAssignableDeallocatable(1);
+    	AllocationPointer dealloc = UnsafeAdapter.newAllocationPointer();
         final long address = UnsafeAdapter.allocateMemory(2, dealloc);
         char value = nextCharacter();
         UnsafeAdapter.putChar(address, value);
@@ -155,7 +131,7 @@ public class AutoDeallocationTest extends BaseTest {
         log("MemoryBean State After Alloc: %s", UnsafeAdapter.getMemoryMBean().getState());
         dealloc = null;
         System.gc();
-        sleep(100);
+        sleep(100, 100000);
         log("MemoryBean State After Clear: %s", UnsafeAdapter.getMemoryMBean().getState());
         validateDeallocated(0, -1);        
     }
@@ -169,7 +145,7 @@ public class AutoDeallocationTest extends BaseTest {
     
     @Test    
     public void testAutoClearedAllocatedShort() throws Exception {
-        DefaultAssignableDeAllocateMe dealloc = new DefaultAssignableDeAllocateMe(1); 
+        DefaultAssignableDeallocatable dealloc = new DefaultAssignableDeallocatable(1); 
         final long address = UnsafeAdapter.allocateMemory(2, dealloc);
         short value = nextPosShort();
         UnsafeAdapter.putShort(address, value);
@@ -193,7 +169,7 @@ public class AutoDeallocationTest extends BaseTest {
     
     @Test    
     public void testAutoClearedAllocatedInteger() throws Exception {
-        DefaultAssignableDeAllocateMe dealloc = new DefaultAssignableDeAllocateMe(1); 
+        DefaultAssignableDeallocatable dealloc = new DefaultAssignableDeallocatable(1); 
         final long address = UnsafeAdapter.allocateMemory(4, dealloc);
         int value = nextPosInteger();
         UnsafeAdapter.putInt(address, value);
@@ -217,7 +193,7 @@ public class AutoDeallocationTest extends BaseTest {
     
     @Test    
     public void testAutoClearedAllocatedFloat() throws Exception {
-        DefaultAssignableDeAllocateMe dealloc = new DefaultAssignableDeAllocateMe(1); 
+        DefaultAssignableDeallocatable dealloc = new DefaultAssignableDeallocatable(1); 
         final long address = UnsafeAdapter.allocateMemory(4, dealloc);
         float value = nextPosFloat();
         UnsafeAdapter.putFloat(address, value);
@@ -227,7 +203,7 @@ public class AutoDeallocationTest extends BaseTest {
         log("MemoryBean State After Alloc: %s", UnsafeAdapter.getMemoryMBean().getState());
         dealloc = null;
         System.gc();
-        sleep(100);
+        sleep(100, 1000000);
         log("MemoryBean State After Clear: %s", UnsafeAdapter.getMemoryMBean().getState());
         validateDeallocated(0, -1);        
     }
@@ -241,7 +217,7 @@ public class AutoDeallocationTest extends BaseTest {
     
     @Test    
     public void testAutoClearedAllocatedDouble() throws Exception {
-        DefaultAssignableDeAllocateMe dealloc = new DefaultAssignableDeAllocateMe(1); 
+        DefaultAssignableDeallocatable dealloc = new DefaultAssignableDeallocatable(1); 
         final long address = UnsafeAdapter.allocateMemory(4, dealloc);
         double value = nextPosDouble();
         UnsafeAdapter.putDouble(address, value);

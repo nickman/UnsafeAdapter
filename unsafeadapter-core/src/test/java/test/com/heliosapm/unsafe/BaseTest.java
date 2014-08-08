@@ -32,6 +32,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
+import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -83,6 +84,16 @@ public class BaseTest implements PrepareLifecycle {
 	/** The platform MBeanServer */
 	protected static final MBeanServer PLATFORM_AGENT = ManagementFactory.getPlatformMBeanServer();
 	
+	/** The debug agent library signature */
+	public static final String AGENT_LIB = "-agentlib:";	
+	/** The legacy debug agent library signature */
+	public static final String LEGACY_AGENT_LIB = "-Xrunjdwp:";
+	
+	public static final boolean DEBUG_AGENT_LOADED;
+	
+	
+	
+	
 	/** Inited system out ref */
 	protected static final PrintStream OUT = System.out;
 	/** Inited system out ref */
@@ -92,6 +103,7 @@ public class BaseTest implements PrepareLifecycle {
 	protected static final Unsafe testUnsafe;
 	
 	static {
+		DEBUG_AGENT_LOADED = isDebugAgentLoaded();
         try {        	
             Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
             theUnsafe.setAccessible(true);
@@ -199,6 +211,17 @@ public class BaseTest implements PrepareLifecycle {
 		} catch (Exception ex) {
 			throw new RuntimeException(ex);
 		}
+	}
+	
+	/**
+	 * Causes the calling thread to pause for the designated time in ms according
+	 * to whether or not the Debug Agent is loaded
+	 * @param runMs the pause time in ms if the debug agent is NOT loaded
+	 * @param debugMs the pause time in ms if the debug agent is loaded
+	 */
+	protected static void sleep(long runMs, long debugMs) {
+		if(DEBUG_AGENT_LOADED) sleep(debugMs);
+		else sleep(runMs);
 	}
 
 	/**
@@ -430,6 +453,17 @@ public class BaseTest implements PrepareLifecycle {
 	
 	
 	
+	/**
+	 * Determines if this JVM is running with the debug agent enabled
+	 * @return true if this JVM is running with the debug agent enabled, false otherwise
+	 */
+	public static boolean isDebugAgentLoaded() {
+		List<String> inputArguments = ManagementFactory.getRuntimeMXBean().getInputArguments();
+		for(String s: inputArguments) {
+			if(s.trim().startsWith(AGENT_LIB) || s.trim().startsWith(LEGACY_AGENT_LIB)) return true;
+		}
+		return false;
+	}
 
 
 	
