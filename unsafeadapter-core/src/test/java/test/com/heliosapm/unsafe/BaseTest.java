@@ -399,45 +399,60 @@ public class BaseTest implements PrepareLifecycle {
 	/**
 	 * Validates that mem tracking reports correct values after memory is allocated  when tracking is turned on, 
 	 * or that disabled mem tracking is reporting the disabled values. Assumes one allocation
+	 * @param name A descriptive name to identify which test is making this validation call
+	 * @param trackedValue The expected value when mem tracking is enabled
+	 * @param untrackedValue The expected value when mem tracking is disabled
+	 * 
+	 */
+	public void validateAllocated(String name, long trackedValue, long untrackedValue) {
+		validateAllocated(name, trackedValue, untrackedValue, 1);
+	}
+	
+	/**
+	 * Validates that mem tracking reports correct values after memory is allocated  when tracking is turned on, 
+	 * or that disabled mem tracking is reporting the disabled values. Assumes one allocation
 	 * @param trackedValue The expected value when mem tracking is enabled
 	 * @param untrackedValue The expected value when mem tracking is disabled
 	 * 
 	 */
 	public void validateAllocated(long trackedValue, long untrackedValue) {
-		validateAllocated(trackedValue, untrackedValue, 1);
+		validateAllocated("Unknown", trackedValue, untrackedValue, 1);
 	}
+	
 
 	
 	/**
 	 * Validates that mem tracking reports correct values after memory is allocated  when tracking is turned on, 
 	 * or that disabled mem tracking is reporting the disabled values.
+	 * @param name A descriptive name to identify which test is making this validation call
 	 * @param trackedValue The expected value when mem tracking is enabled
 	 * @param untrackedValue The expected value when mem tracking is disabled
 	 * @param allocationCount The number of expected allocations
 	 * 
 	 */
-	public void validateAllocated(long trackedValue, long untrackedValue, long allocationCount) {
+	public void validateAllocated(String name, long trackedValue, long untrackedValue, long allocationCount) {
 		if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
-			Assert.assertEquals("Mem Total Alloc was unexpected. --> ", trackedValue, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
-			Assert.assertEquals("Mem Total Allocation Count was unexpected. --> ", allocationCount, UnsafeAdapter.getMemoryMBean().getTotalAllocationCount());
+			Assert.assertEquals("[" + name + "] Mem Total Alloc was unexpected. --> ", trackedValue, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+			Assert.assertEquals("[" + name + "] Mem Total Allocation Count was unexpected. --> ", allocationCount, UnsafeAdapter.getMemoryMBean().getTotalAllocationCount());
 		} else {
-			Assert.assertEquals("Mem Total Alloc was unexpected. --> ", untrackedValue, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
-			Assert.assertEquals("Mem Total Allocation Count was unexpected. --> ", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocationCount());
+			Assert.assertEquals("[" + name + "] Mem Total Alloc was unexpected. --> ", untrackedValue, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+			Assert.assertEquals("[" + name + "] Mem Total Allocation Count was unexpected. --> ", -1, UnsafeAdapter.getMemoryMBean().getTotalAllocationCount());
 		}
 	}
 	
 	/**
 	 * Validates that mem tracking reports correct values after memory is deallocated  when tracking is turned on, 
 	 * or that disabled mem tracking is reporting the disabled values.
+	 * @param name Test identifier so we know where this validation was requested from
 	 * @param trackedValue The expected value when mem tracking is enabled
 	 * @param untrackedValue The expected value when mem tracking is disabled
 	 * 
 	 */
-	public void validateDeallocated(long trackedValue, long untrackedValue) {
+	public void validateDeallocated(String name, long trackedValue, long untrackedValue) {
 		if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
-			Assert.assertEquals("Mem Total Post DeAlloc was unexpected. --> ", trackedValue, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+			Assert.assertEquals("[" + name + "] Mem Total Post DeAlloc was unexpected. --> ", trackedValue, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
 		} else {
-			Assert.assertEquals("Mem Total Post DeAlloc was unexpected. --> ", untrackedValue, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
+			Assert.assertEquals("[" + name + "] Mem Total Post DeAlloc was unexpected. --> ", untrackedValue, UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory());
 		}
 	}
 

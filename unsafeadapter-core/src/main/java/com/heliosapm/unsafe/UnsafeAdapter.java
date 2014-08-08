@@ -24,11 +24,9 @@
  */
 package com.heliosapm.unsafe;
 
-import java.lang.ref.Reference;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.security.ProtectionDomain;
-import java.util.concurrent.atomic.AtomicLong;
 
 import javax.management.ObjectName;
 

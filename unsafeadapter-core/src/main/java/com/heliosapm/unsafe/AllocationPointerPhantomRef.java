@@ -67,6 +67,7 @@ class AllocationPointerPhantomRef extends PhantomReference<AllocationPointer> im
 	AllocationPointerPhantomRef(AllocationPointer referent, long address, ReferenceQueue<? super AllocationPointer> refQueue) {
 		super(referent, refQueue);
 		this.address = address;		
+		referent.setAttached();
 	}
 	
 	/**

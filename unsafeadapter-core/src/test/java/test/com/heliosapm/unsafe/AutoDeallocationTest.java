@@ -25,7 +25,6 @@
 package test.com.heliosapm.unsafe;
 
 import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.heliosapm.unsafe.AllocationPointer;
@@ -62,7 +61,7 @@ public class AutoDeallocationTest extends BaseTest {
 		System.gc();
 		sleep(100);
 		log("MemoryBean State After Clear: %s", UnsafeAdapter.getMemoryMBean().getState());
-		validateDeallocated(0, -1);		
+		validateDeallocated("testAutoClearedAllocatedLong", 0, -1);		
 	}
 
 
@@ -84,7 +83,7 @@ public class AutoDeallocationTest extends BaseTest {
         System.gc();
         sleep(100);
         log("MemoryBean State After Clear: %s", UnsafeAdapter.getMemoryMBean().getState());
-        validateDeallocated(0, -1);        
+        validateDeallocated("testAutoClearedAllocatedBoolean", 0, -1);
     }
 
 
@@ -108,7 +107,7 @@ public class AutoDeallocationTest extends BaseTest {
         System.gc();
         sleep(100);
         log("MemoryBean State After Clear: %s", UnsafeAdapter.getMemoryMBean().getState());
-        validateDeallocated(0, -1);        
+        validateDeallocated("testAutoClearedAllocatedByte", 0, -1);    
     }
 
 
@@ -133,7 +132,7 @@ public class AutoDeallocationTest extends BaseTest {
         System.gc();
         sleep(100, 100000);
         log("MemoryBean State After Clear: %s", UnsafeAdapter.getMemoryMBean().getState());
-        validateDeallocated(0, -1);        
+        validateDeallocated("testAutoClearedAllocatedCharacter", 0, -1);    
     }
 
 
@@ -157,7 +156,7 @@ public class AutoDeallocationTest extends BaseTest {
         System.gc();
         sleep(100);
         log("MemoryBean State After Clear: %s", UnsafeAdapter.getMemoryMBean().getState());
-        validateDeallocated(0, -1);        
+        validateDeallocated("testAutoClearedAllocatedShort", 0, -1);     
     }
 
 
@@ -181,7 +180,7 @@ public class AutoDeallocationTest extends BaseTest {
         System.gc();
         sleep(100);
         log("MemoryBean State After Clear: %s", UnsafeAdapter.getMemoryMBean().getState());
-        validateDeallocated(0, -1);        
+        validateDeallocated("testAutoClearedAllocatedInteger", 0, -1);       
     }
 
 
@@ -205,7 +204,7 @@ public class AutoDeallocationTest extends BaseTest {
         System.gc();
         sleep(100, 1000000);
         log("MemoryBean State After Clear: %s", UnsafeAdapter.getMemoryMBean().getState());
-        validateDeallocated(0, -1);        
+        validateDeallocated("testAutoClearedAllocatedFloat", 0, -1);        
     }
 
 
@@ -229,7 +228,7 @@ public class AutoDeallocationTest extends BaseTest {
         System.gc();
         sleep(100);
         log("MemoryBean State After Clear: %s", UnsafeAdapter.getMemoryMBean().getState());
-        validateDeallocated(0, -1);        
+        validateDeallocated("testAutoClearedAllocatedDouble", 0, -1);  
     }
 
 

@@ -24,8 +24,6 @@
  */
 package com.heliosapm.unsafe;
 
-import java.lang.ref.PhantomReference;
-import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 
 /**
@@ -35,6 +33,9 @@ import java.lang.ref.ReferenceQueue;
  * <p>Company: Helios Development Group LLC</p>
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>com.heliosapm.unsafe.AllocationPointer</code></p>
+ * TODO: <ol>
+ * <li>AP needs a flag to indicate that addresses are "fake" when using SafeMemoryAllocations and the AP is dettached<li>
+ * </ol>
  */
 
 public class AllocationPointer implements ReferenceProvider<AllocationPointer>, AddressAssignable {

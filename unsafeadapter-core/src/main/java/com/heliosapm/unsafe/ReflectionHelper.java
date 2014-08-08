@@ -225,6 +225,19 @@ public class ReflectionHelper {
 	}
 	
 	/**
+	 * Reflectively invokes a parameterized method 
+	 * @param methodName The method to invoke
+	 * @param instance The object instance to invoke on
+	 * @param signature The method signature
+	 * @param args The method arguments
+	 * @return the return value of the invocation
+	 */
+	public static Object invoke(Object instance, String methodName, Class<?>[] signature, Object...args) {
+		return invoke(instance.getClass(), methodName, instance, signature, args);
+	}
+	
+	
+	/**
 	 * Creates a new {@link ReferenceQueueLengthReader} for the passed {@link ReferenceQueue}.
 	 * @param refQueue The reference queue to create the reader for
 	 * @return the new ReferenceQueueLengthReader
@@ -277,6 +290,28 @@ public class ReflectionHelper {
 				return -1L;
 			}											
 		}		
+	}
+	
+	/**
+	 * Returns the specified <strong>static<strong> method, set to be accessible
+	 * @param clazz The class to get the method from
+	 * @param methodName The method name
+	 * @param signature The method parameter types
+	 * @return the specified method
+	 */
+	public static Method getStaticMethod(Class<?> clazz, String methodName, Class<?>...signature) {
+		try {
+			Method m = null;
+			try {
+				m = clazz.getDeclaredMethod(methodName, signature);
+			} catch (NoSuchMethodException nse) {
+				m = clazz.getMethod(methodName, signature);
+			}
+			m.setAccessible(true);
+			return m;
+		} catch (Exception ex) {
+			throw new RuntimeException(ex);
+		}
 	}
 
 	private ReflectionHelper() {}
