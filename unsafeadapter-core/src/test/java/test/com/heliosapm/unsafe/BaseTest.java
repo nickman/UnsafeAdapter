@@ -89,6 +89,7 @@ public class BaseTest implements PrepareLifecycle {
 	/** The legacy debug agent library signature */
 	public static final String LEGACY_AGENT_LIB = "-Xrunjdwp:";
 	
+	/** Indicates if the debug agent is loaded */
 	public static final boolean DEBUG_AGENT_LOADED;
 	
 	
@@ -101,6 +102,9 @@ public class BaseTest implements PrepareLifecycle {
 	
 	/** A direct reference to the unsafe class instance */
 	protected static final Unsafe testUnsafe;
+	
+	/** The JVM's address size */
+	public static final long ADDRESS_SIZE = UnsafeAdapter.ADDRESS_SIZE;
 	
 	static {
 		DEBUG_AGENT_LOADED = isDebugAgentLoaded();

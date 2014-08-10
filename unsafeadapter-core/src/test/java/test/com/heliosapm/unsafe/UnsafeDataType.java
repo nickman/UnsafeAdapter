@@ -24,6 +24,10 @@
  */
 package test.com.heliosapm.unsafe;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -97,11 +101,68 @@ public enum UnsafeDataType implements UnsafeDataTypeInvoker<Object> {
 		adapterVolatilePutOp = ReflectionHelper.getStaticMethod(UnsafeAdapter.class, putOp + "Volatile", long.class, primitiveType);
 	}
 	
-	public static void main(String[] args) {
-		for(UnsafeDataType udt: UnsafeDataType.values()) {
-			System.out.println(udt.name() + " : " + udt.randomValue());
+	private static String readFile(String fileName) {
+		File f = new File(fileName);
+		if(!f.canRead()) throw new RuntimeException("The file [" + fileName + "] cannot be read");
+		if(f.isDirectory()) throw new RuntimeException("The file [" + fileName + "] is a directory");
+		StringBuilder b = new StringBuilder((int)f.length());
+		FileReader fr = null;
+		BufferedReader br = null;
+		try {
+			fr = new FileReader(f);
+			br = new BufferedReader(fr);
+			String line = null;
+			while((line = br.readLine())!=null) {
+				b.append(line).append("\n");				
+			}
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		} finally {
+			try { br.close(); } catch (Exception x) {/* No Op */}
+			try { fr.close(); } catch (Exception x) {/* No Op */}
+			
 		}
+		return b.toString();
 	}
+	
+	private static String doReplace(UnsafeDataType udt, String template) {
+		return template
+			.replace("##Type##", udt.type.getSimpleName())
+			.replace("##type##", udt.primitiveType.getName())
+			.replace("##udt##", "" + udt.name())
+			.replace("##size##", "" + udt.size)
+			.replace("##short##", udt.getOp.replace("get", ""));
+	}
+	
+	
+	public static void main(String[] args) {
+		mainx("/tmp/template.txt");
+	}
+	
+	public static void mainx(String...args) {
+		if(args.length==0) {
+			log("Provide code gen template");
+			return;
+		}
+		String template = readFile(args[0]);
+		for(UnsafeDataType udt: UnsafeDataType.values()) {
+			log(doReplace(udt, template));
+			log("\n");
+		}
+		
+		
+		
+	}
+	
+	/**
+	 * Out printer
+	 * @param fmt the message format
+	 * @param args the message values
+	 */
+	public static void log(String fmt, Object...args) {
+		System.out.println(String.format(fmt, args));
+	}
+	
 	
 	/** The size of this data type */
 	public final byte size;

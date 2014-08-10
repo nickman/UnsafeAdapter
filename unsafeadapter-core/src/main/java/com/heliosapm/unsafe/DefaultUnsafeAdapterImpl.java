@@ -182,6 +182,7 @@ public class DefaultUnsafeAdapterImpl implements DefaultUnsafeAdapterImplMBean {
 	}
 	
 	
+	
 	/**
 	 * Returns the number of pending references in the reference queue
 	 * @return the number of pending references
@@ -299,8 +300,23 @@ public class DefaultUnsafeAdapterImpl implements DefaultUnsafeAdapterImplMBean {
 	 * @return The address of the new allocation
 	 * @see sun.misc.Unsafe#reallocateMemory(long, long)
 	 */
-	public long reallocateMemory(long address, long size) {
+	public long reallocateMemory(final long address, final long size) {
 		return _reallocateMemory(address, size, 0, null);
+	}	
+	
+	/**
+	 * Resizes a new block of native memory, to the given size in bytes.
+	 * <b>NOTE:</b>If the caller implements {@link Deallocatable} and expects the allocations
+	 * to be automatically cleared, the returned value should overwrite the index of 
+	 * the {@link Deallocatable}'s array where the previous address was.    
+	 * @param address The address of the existing allocation
+	 * @param size The size of the new allocation in bytes
+	 * @param memoryManager The optional memory block address manager being used by the caller
+	 * @return The address of the new allocation
+	 * @see sun.misc.Unsafe#reallocateMemory(long, long)
+	 */
+	public long reallocateMemory(final long address, final long size, final Object memoryManager) {
+		return _reallocateMemory(address, size, 0, memoryManager);
 	}	
 	
 	/**

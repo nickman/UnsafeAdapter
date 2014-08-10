@@ -196,7 +196,7 @@ public class AllocationPointerOperations {
 	 * @return a unattached AllocationPointer
 	 */
 	public static final AllocationPointer newAllocationPointerInstance(boolean memTracking, boolean memAlignment) {
-		return new AllocationPointer(memTracking, memAlignment, refIdSerial.incrementAndGet());		
+		return new AllocationPointer(memTracking, memAlignment, refIdSerial.decrementAndGet());		
 	}
     
     

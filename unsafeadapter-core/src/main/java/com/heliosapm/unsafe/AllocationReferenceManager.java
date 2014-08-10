@@ -28,6 +28,8 @@ import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.reflect.Field;
 import java.util.Arrays;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.concurrent.atomic.AtomicLong;
 
 import jsr166e.LongAdder;
@@ -78,6 +80,8 @@ public class AllocationReferenceManager implements Runnable {
 
 	/** A map of memory allocation sizes and overhead keyed by the address for unmanaged memory allocations */ 
 	final NonBlockingHashMapLong<long[]> trackedRaw;
+	/** A map of runnables registered for AllocationPointers and fired when the AP is cleared keyed by the reference id */ 
+	final NonBlockingHashMapLong<RunnableSequence> onRefClearRunnables = new NonBlockingHashMapLong<RunnableSequence>(256);
 	
 	
 	// =========================================================
@@ -151,6 +155,55 @@ public class AllocationReferenceManager implements Runnable {
 	// AllocationPointer Requests
 	// =====================================================================================================
 	
+	private class RunnableSequence implements Runnable {
+		/** An ordered set of runnables that will be run when this runnable runs */
+		private final LinkedHashSet<Runnable> nestedRunnables = new LinkedHashSet<Runnable>();
+		
+		/**
+		 * Adds a new nested runnable
+		 * @param runnable The runnable to add
+		 * @return this RunnableSequence
+		 */
+		public RunnableSequence registerRunnable(Runnable runnable) {
+			if(runnable!=null) {
+				nestedRunnables.add(runnable);
+			}
+			return this;
+		}
+		
+		/**
+		 * <p>Runs the nested runnables in the order they were registered</p>
+		 * {@inheritDoc}
+		 * @see java.lang.Runnable#run()
+		 */
+		public void run() {
+			final Iterator<Runnable> iter = nestedRunnables.iterator();
+			while(iter.hasNext()) {
+				Runnable r = iter.next();
+				try { r.run(); } catch (Exception x) {/* No Op */}
+				iter.remove();
+			}
+		}
+	}
+	
+	/**
+	 * Registers an AllocationPointer on clear runnable.
+	 * Throws a runime exception if the ref id does not belong to a registered AP.
+	 * @param refId The reference id of the AllocationPointer
+	 * @param runnable The runnable to register (ignored if null)
+	 */
+	public final void registerOnClearRunnable(final long refId, final Runnable runnable) {
+		if(runnable!=null) {
+			if(!trackedRefs.containsKey(refId)) throw new RuntimeException("The reference id [" + refId + "] is not registered");
+			RunnableSequence rs = null;
+			onRefClearRunnables.put(refId, ((
+					rs = onRefClearRunnables.get(refId))==null ? 
+							new RunnableSequence() : 
+							rs)
+						.registerRunnable(runnable)
+					);
+		}
+	}
 	
 	/**
 	 * Returns a new {@link AllocationPointer} that is ref queue registered 
@@ -158,10 +211,23 @@ public class AllocationReferenceManager implements Runnable {
 	 * @return a new AllocationPointer
 	 */
 	public final AllocationPointer newAllocationPointer() {
+		return newAllocationPointer(null);
+	}
+	
+	/**
+	 * Returns a new {@link AllocationPointer} that is ref queue registered 
+	 * and configured according to mem tracking and mem alignment settings. 
+	 * @param onClearRunnable An optional on clear runnable
+	 * @return a new AllocationPointer
+	 */
+	public final AllocationPointer newAllocationPointer(final Runnable onClearRunnable) {
 		final long refId = refSerial.incrementAndGet();
 		final AllocationPointer ap = new AllocationPointer(memTracking, memAlignment, refId);
 		AllocationPointerPhantomRef ref = ap.getReference(refQueue);
 		trackedRefs.put(refId, ref);
+		if(onClearRunnable!=null) {
+			onRefClearRunnables.put(refId, new RunnableSequence().registerRunnable(onClearRunnable));
+		}
 		return ap;
 	}
 	
@@ -197,6 +263,8 @@ public class AllocationReferenceManager implements Runnable {
 						cleared = null;
 						decrement(totals[0], totals[1]);
 					}
+					final RunnableSequence rs = onRefClearRunnables.get(refId);
+					if(rs != null) rs.run();  // FIXME:  hand this off to a pool ?
 //					ref.clear();
 					refsCleared.increment();
 				}

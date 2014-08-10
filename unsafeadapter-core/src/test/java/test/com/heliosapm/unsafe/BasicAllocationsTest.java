@@ -52,13 +52,19 @@ public class BasicAllocationsTest extends BaseTest {
 	
 	/** A snapshot of the raw allocation count so we can verify it */
 	protected int rawCount = -1;
+
+	
+	
 	/**
 	 * Initializes the config and creates a new AllocationReferenceManager in accordance.
+	 * We only need to enable this if we're debugging.
 	 */
 	@Before
 	public void beforeTest() {
-		if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
-			ReflectionHelper.invoke(UnsafeAdapter.class, "resetRefMgr");
+		if(DEBUG_AGENT_LOADED) {
+			if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+				ReflectionHelper.invoke(UnsafeAdapter.class, "resetRefMgr");
+			}
 		}
 	}
 	
@@ -117,7 +123,7 @@ public class BasicAllocationsTest extends BaseTest {
 		return totalAllocated;
 	}
 	
-	public static final long ADDRESS_SIZE = UnsafeAdapter.ADDRESS_SIZE;
+	
 	
 	/**
 	 * Generic unsafe data type type allocation, write, read, reallocation and deallocation test
@@ -211,7 +217,7 @@ public class BasicAllocationsTest extends BaseTest {
 		final int loops = nextPosInt(100)+10;		
 		final long typeSize = testUnsafe.arrayIndexScale(Array.newInstance(udt.primitiveType, 1).getClass());
 		final long expectedAllocation = (multiplier * loops * udt.size)  + (loops * udt.size);
-		log("Executing Simple Allocation Test: type: [%s], size: [%s], multiplier: [%s], loops: [%s], expected allocation: [%s]", udt.name(), typeSize,  multiplier, loops, expectedAllocation);
+		log("Executing Simple Allocation/Reallocation Test: type: [%s], size: [%s], multiplier: [%s], loops: [%s], expected allocation: [%s]", udt.name(), typeSize,  multiplier, loops, expectedAllocation);
 		final long actualAllocation = testReallocation(udt, multiplier, loops);
 		Assert.assertEquals("Total Allocation was not [" + expectedAllocation + "]", expectedAllocation, actualAllocation);
 	}
@@ -238,261 +244,171 @@ public class BasicAllocationsTest extends BaseTest {
 		for(UnsafeDataType udt: UnsafeDataType.values()) {
 			testReallocated(udt);
 			break;
-		}
-		log("Completed testSimpleReallocationDeallocation");
+		}		
+	}
+
+	/**
+	 * Tests data allocation, write, read, and deallocation for booleans
+	 * @throws Exception thrown on any error
+	 */
+	@Test
+	public void testBooleanAllocationDeallocation() throws Exception {
+		testAllocated(UnsafeDataType.BOOLEAN);
+	}
+
+	/**
+	 * Tests data allocation, write, read, reallocation and deallocation for booleans
+	 * @throws Exception thrown on any error
+	 */
+	@Test
+	public void testBooleanReallocationDeallocation() throws Exception {
+		testReallocated(UnsafeDataType.BOOLEAN);
 	}
 
 
+
+	/**
+	 * Tests data allocation, write, read, and deallocation for bytes
+	 * @throws Exception thrown on any error
+	 */
+	@Test
+	public void testByteAllocationDeallocation() throws Exception {
+		testAllocated(UnsafeDataType.BYTE);
+	}
+
+	/**
+	 * Tests data allocation, write, read, reallocation and deallocation for bytes
+	 * @throws Exception thrown on any error
+	 */
+	@Test
+	public void testByteReallocationDeallocation() throws Exception {
+		testReallocated(UnsafeDataType.BYTE);
+	}
+
+
+
+	/**
+	 * Tests data allocation, write, read, and deallocation for chars
+	 * @throws Exception thrown on any error
+	 */
+	@Test
+	public void testCharacterAllocationDeallocation() throws Exception {
+		testAllocated(UnsafeDataType.CHAR);
+	}
+
+	/**
+	 * Tests data allocation, write, read, reallocation and deallocation for chars
+	 * @throws Exception thrown on any error
+	 */
+	@Test
+	public void testCharacterReallocationDeallocation() throws Exception {
+		testReallocated(UnsafeDataType.CHAR);
+	}
+
+
+
+	/**
+	 * Tests data allocation, write, read, and deallocation for shorts
+	 * @throws Exception thrown on any error
+	 */
+	@Test
+	public void testShortAllocationDeallocation() throws Exception {
+		testAllocated(UnsafeDataType.SHORT);
+	}
+
+	/**
+	 * Tests data allocation, write, read, reallocation and deallocation for shorts
+	 * @throws Exception thrown on any error
+	 */
+	@Test
+	public void testShortReallocationDeallocation() throws Exception {
+		testReallocated(UnsafeDataType.SHORT);
+	}
+
+
+
+	/**
+	 * Tests data allocation, write, read, and deallocation for ints
+	 * @throws Exception thrown on any error
+	 */
+	@Test
+	public void testIntegerAllocationDeallocation() throws Exception {
+		testAllocated(UnsafeDataType.INTEGER);
+	}
+
+	/**
+	 * Tests data allocation, write, read, reallocation and deallocation for ints
+	 * @throws Exception thrown on any error
+	 */
+	@Test
+	public void testIntegerReallocationDeallocation() throws Exception {
+		testReallocated(UnsafeDataType.INTEGER);
+	}
+
+
+
+	/**
+	 * Tests data allocation, write, read, and deallocation for floats
+	 * @throws Exception thrown on any error
+	 */
+	@Test
+	public void testFloatAllocationDeallocation() throws Exception {
+		testAllocated(UnsafeDataType.FLOAT);
+	}
+
+	/**
+	 * Tests data allocation, write, read, reallocation and deallocation for floats
+	 * @throws Exception thrown on any error
+	 */
+	@Test
+	public void testFloatReallocationDeallocation() throws Exception {
+		testReallocated(UnsafeDataType.FLOAT);
+	}
+
+
+
+	/**
+	 * Tests data allocation, write, read, and deallocation for longs
+	 * @throws Exception thrown on any error
+	 */
+	@Test
+	public void testLongAllocationDeallocation() throws Exception {
+		testAllocated(UnsafeDataType.LONG);
+	}
+
+	/**
+	 * Tests data allocation, write, read, reallocation and deallocation for longs
+	 * @throws Exception thrown on any error
+	 */
+	@Test
+	public void testLongReallocationDeallocation() throws Exception {
+		testReallocated(UnsafeDataType.LONG);
+	}
+
+
+
+	/**
+	 * Tests data allocation, write, read, and deallocation for doubles
+	 * @throws Exception thrown on any error
+	 */
+	@Test
+	public void testDoubleAllocationDeallocation() throws Exception {
+		testAllocated(UnsafeDataType.DOUBLE);
+	}
+
+	/**
+	 * Tests data allocation, write, read, reallocation and deallocation for doubles
+	 * @throws Exception thrown on any error
+	 */
+	@Test
+	public void testDoubleReallocationDeallocation() throws Exception {
+		testReallocated(UnsafeDataType.DOUBLE);
+	}
+
+
+
+	
 	    
-
-		/**
-		 * Tests a long allocation, write, read, re-allocation and deallocation
-		 * @throws Exception thrown on any error
-		 */
-		@Test
-		public void testReallocatedLong() throws Exception {
-			long address = -1;
-			try {
-				address = UnsafeAdapter.allocateMemory(8);
-				rawCount = rawAllocations.incrementAndGet();
-				long value = nextPosLong();
-				long nextValue = nextPosLong();
-				UnsafeAdapter.putLong(address, value);
-				Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getLong(address));
-				Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getLong(address));
-				validateAllocated(8, -1);	
-				address = UnsafeAdapter.reallocateMemory(address, 16);
-				UnsafeAdapter.putLong(address + 8, nextValue);
-				Assert.assertEquals("First Value was not [" + value + "]", value, UnsafeAdapter.getLong(address));
-				Assert.assertEquals("First Value was not [" + value + "]", value, testUnsafe.getLong(address));	
-				Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, UnsafeAdapter.getLong(address + 8));
-				Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, testUnsafe.getLong(address + 8));
-				validateAllocated(16, -1);
-			} finally {
-				if(address!=-1) UnsafeAdapter.freeMemory(address);
-				validateDeallocated("testReallocatedLong", 0, -1);
-			}
-		}
-	    
-
-        /**
-         * Tests a int allocation, write, read, re-allocation and deallocation
-         * @throws Exception thrown on any error
-         */
-        @Test
-        public void testReallocatedInteger() throws Exception {
-            long address = -1;
-            try {
-                address = UnsafeAdapter.allocateMemory(4);
-                rawCount = rawAllocations.incrementAndGet();
-                int value = nextPosInteger();
-                int nextValue = nextPosInteger();
-                UnsafeAdapter.putInt(address, value);
-                Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getInt(address));
-                Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getInt(address));   
-                validateAllocated(4, -1);
-                address = UnsafeAdapter.reallocateMemory(address, 4*2);
-                UnsafeAdapter.putInt(address + 4, nextValue);
-                Assert.assertEquals("First Value was not [" + value + "]", value, UnsafeAdapter.getInt(address));
-                Assert.assertEquals("First Value was not [" + value + "]", value, testUnsafe.getInt(address));    
-                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, UnsafeAdapter.getInt(address + 4));
-                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, testUnsafe.getInt(address + 4));
-                validateAllocated(4*2, -1);
-            } finally {
-                if(address!=-1) UnsafeAdapter.freeMemory(address);
-                rawCount = rawAllocations.decrementAndGet();
-                validateDeallocated("testReallocatedInteger", 0, -1);
-            }
-        }
-
-
-        
-        
-
-        /**
-         * Tests a byte allocation, write, read, re-allocation and deallocation
-         * @throws Exception thrown on any error
-         */
-        @Test
-        public void testReallocatedByte() throws Exception {
-            long address = -1;
-            try {
-                address = UnsafeAdapter.allocateMemory(1);    
-                rawCount = rawAllocations.incrementAndGet();
-                byte value = nextPosByte();
-                byte nextValue = nextPosByte();
-                UnsafeAdapter.putByte(address, value);
-                Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getByte(address));
-                Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getByte(address));   
-                validateAllocated(1, -1);
-                address = UnsafeAdapter.reallocateMemory(address, 1*2);
-                UnsafeAdapter.putByte(address + 1, nextValue);
-                Assert.assertEquals("First Value was not [" + value + "]", value, UnsafeAdapter.getByte(address));
-                Assert.assertEquals("First Value was not [" + value + "]", value, testUnsafe.getByte(address));    
-                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, UnsafeAdapter.getByte(address + 1));
-                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, testUnsafe.getByte(address + 1));
-                validateAllocated(1*2, -1);
-            } finally {
-                if(address!=-1) UnsafeAdapter.freeMemory(address);
-                rawCount = rawAllocations.decrementAndGet();
-                validateDeallocated("testReallocatedByte", 0, -1);
-            }
-        }
-
-
-        /**
-         * Tests a boolean allocation, write, read, re-allocation and deallocation
-         * @throws Exception thrown on any error
-         */
-        @Test
-        public void testReallocatedBoolean() throws Exception {
-            long address = -1;
-            try {
-                address = UnsafeAdapter.allocateMemory(1);
-                rawCount = rawAllocations.incrementAndGet();
-                boolean value = nextBoolean();
-                boolean nextValue = nextBoolean();
-                UnsafeAdapter.putBoolean(address, value);
-                Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getBoolean(address));
-                Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getBoolean(null, address));    
-                validateAllocated(1, -1);
-                address = UnsafeAdapter.reallocateMemory(address, 1*2);
-                UnsafeAdapter.putBoolean(address + 1, nextValue);
-                Assert.assertEquals("First Value was not [" + value + "]", value, UnsafeAdapter.getBoolean(address));
-                Assert.assertEquals("First Value was not [" + value + "]", value, testUnsafe.getBoolean(null, address));    
-                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, UnsafeAdapter.getBoolean(address + 1));
-                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, testUnsafe.getBoolean(null, address + 1));
-                validateAllocated(1*2, -1);                
-            } finally {
-                if(address!=-1) UnsafeAdapter.freeMemory(address);
-                rawCount = rawAllocations.decrementAndGet();
-                validateDeallocated("testReallocatedBoolean", 0, -1);
-            }
-        }
-
-
-        /**
-         * Tests a char allocation, write, read, re-allocation and deallocation
-         * @throws Exception thrown on any error
-         */
-        @Test
-        public void testReallocatedCharacter() throws Exception {
-            long address = -1;
-            try {
-                address = UnsafeAdapter.allocateMemory(2);
-                rawCount = rawAllocations.incrementAndGet();
-                char value = nextCharacter();
-                char nextValue = nextCharacter();
-                UnsafeAdapter.putChar(address, value);
-                Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getChar(address));
-                Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getChar(address));    
-                validateAllocated(2, -1);
-                address = UnsafeAdapter.reallocateMemory(address, 2*2);
-                UnsafeAdapter.putChar(address + 2, nextValue);
-                Assert.assertEquals("First Value was not [" + value + "]", value, UnsafeAdapter.getChar(address));
-                Assert.assertEquals("First Value was not [" + value + "]", value, testUnsafe.getChar(address));    
-                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, UnsafeAdapter.getChar(address + 2));
-                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, testUnsafe.getChar(address + 2));
-                validateAllocated(2*2, -1);                
-            } finally {
-                if(address!=-1) UnsafeAdapter.freeMemory(address);
-                rawCount = rawAllocations.decrementAndGet();
-                validateDeallocated("testReallocatedCharacter", 0, -1);
-            }
-        }
-
-
-        /**
-         * Tests a short allocation, write, read, re-allocation and deallocation
-         * @throws Exception thrown on any error
-         */
-        @Test
-        public void testReallocatedShort() throws Exception {
-            long address = -1;
-            try {
-                address = UnsafeAdapter.allocateMemory(2);
-                rawCount = rawAllocations.incrementAndGet();
-                short value = nextPosShort();
-                short nextValue = nextPosShort();
-                UnsafeAdapter.putShort(address, value);
-                Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getShort(address));
-                Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getShort(address));   
-                validateAllocated(2, -1);
-                address = UnsafeAdapter.reallocateMemory(address, 2*2);
-                UnsafeAdapter.putShort(address + 2, nextValue);
-                Assert.assertEquals("First Value was not [" + value + "]", value, UnsafeAdapter.getShort(address));
-                Assert.assertEquals("First Value was not [" + value + "]", value, testUnsafe.getShort(address));    
-                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, UnsafeAdapter.getShort(address + 2));
-                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, testUnsafe.getShort(address + 2));
-                validateAllocated(2*2, -1);                
-            } finally {
-                if(address!=-1) UnsafeAdapter.freeMemory(address);
-                rawCount = rawAllocations.decrementAndGet();
-                validateDeallocated("testReallocatedShort", 0, -1);
-            }
-        }
-
-
-        /**
-         * Tests a float allocation, write, read, re-allocation and deallocation
-         * @throws Exception thrown on any error
-         */
-        @Test
-        public void testReallocatedFloat() throws Exception {
-            long address = -1;
-            try {
-                address = UnsafeAdapter.allocateMemory(4);
-                rawCount = rawAllocations.incrementAndGet();
-                float value = nextPosFloat();
-                float nextValue = nextPosFloat();
-                UnsafeAdapter.putFloat(address, value);
-                Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getFloat(address), 0f);
-                Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getFloat(address), 0f);    
-                validateAllocated(4, -1);                
-                address = UnsafeAdapter.reallocateMemory(address, 4*2);
-                UnsafeAdapter.putFloat(address + 4, nextValue);
-                Assert.assertEquals("First Value was not [" + value + "]", value, UnsafeAdapter.getFloat(address), 0f);
-                Assert.assertEquals("First Value was not [" + value + "]", value, testUnsafe.getFloat(address), 0f);    
-                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, UnsafeAdapter.getFloat(address + 4), 0f);
-                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, testUnsafe.getFloat(address + 4), 0f);
-                validateAllocated(4*2, -1);
-            } finally {
-                if(address!=-1) UnsafeAdapter.freeMemory(address);
-                rawCount = rawAllocations.decrementAndGet();
-                validateDeallocated("testReallocatedFloat", 0, -1);
-            }
-        }
-
-
-        /**
-         * Tests a double allocation, write, read, re-allocation and deallocation
-         * @throws Exception thrown on any error
-         */
-        @Test
-        public void testReallocatedDouble() throws Exception {
-            long address = -1;            
-            try {
-                address = UnsafeAdapter.allocateMemory(8);                
-                rawCount = rawAllocations.incrementAndGet();
-                double value = nextPosDouble();
-                double nextValue = nextPosDouble();
-                UnsafeAdapter.putDouble(address, value);
-                Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getDouble(address), 0d);
-                Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getDouble(address), 0d);   
-                validateAllocated(8, -1);
-                address = UnsafeAdapter.reallocateMemory(address, 8*2);
-                UnsafeAdapter.putDouble(address + 8, nextValue);
-                Assert.assertEquals("First Value was not [" + value + "]", value, UnsafeAdapter.getDouble(address), 0d);
-                Assert.assertEquals("First Value was not [" + value + "]", value, testUnsafe.getDouble(address), 0d);    
-                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, UnsafeAdapter.getDouble(address + 8), 0d);
-                Assert.assertEquals("Second Value was not [" + nextValue + "]", nextValue, testUnsafe.getDouble(address + 8), 0d);
-                validateAllocated(8*2, -1);                
-            } finally {
-                if(address!=-1) UnsafeAdapter.freeMemory(address);
-                rawCount = rawAllocations.decrementAndGet();
-                validateDeallocated("testReallocatedDouble", 0, -1);
-            }
-        }
 
         
 	

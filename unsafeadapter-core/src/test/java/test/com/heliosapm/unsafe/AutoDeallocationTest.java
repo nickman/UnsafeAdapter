@@ -24,11 +24,17 @@
  */
 package test.com.heliosapm.unsafe;
 
+import java.lang.reflect.Array;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 import com.heliosapm.unsafe.AllocationPointer;
 import com.heliosapm.unsafe.DefaultAssignableDeallocatable;
+import com.heliosapm.unsafe.ReflectionHelper;
 import com.heliosapm.unsafe.UnsafeAdapter;
 
 /**
@@ -42,194 +48,179 @@ import com.heliosapm.unsafe.UnsafeAdapter;
 @SuppressWarnings("restriction")
 public class AutoDeallocationTest extends BaseTest {
 	
+	/** Keeps a count of raw (unmanaged) memory allocations through UnsafeAdapter */
+	protected final AtomicInteger rawAllocations = new AtomicInteger(0);
+	
+	/** A snapshot of the raw allocation count so we can verify it */
+	protected int rawCount = -1;
+
+	
+	
+	/**
+	 * Initializes the config and creates a new AllocationReferenceManager in accordance.
+	 * We only need to enable this if we're debugging.
+	 */
+	@Before
+	public void beforeTest() {
+		if(DEBUG_AGENT_LOADED) {
+			if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+				ReflectionHelper.invoke(UnsafeAdapter.class, "resetRefMgr");
+			}
+		}
+	}
+	
+	/**
+	 * Validates the raw allocation count in the ref mgr
+	 */
+	@After
+	public void afterTest() {
+		if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+			Assert.assertEquals("Total Raw Allocations was unexpected. --> ", 0, UnsafeAdapter.getMemoryMBean().getTotalRawAllocationCount());			
+		} else {
+			Assert.assertEquals("Total Raw Allocations was unexpected. --> ", -1, UnsafeAdapter.getMemoryMBean().getTotalRawAllocationCount());
+		}
+	}
+	
+	
 	
 	/**
 	 * Tests an auto de-allocated long memory allocation 
+	 * @param udt The data type to test
+	 * @param multiplier The allocation size multiplier
+	 * @param loops The number of loops to run
+	 * @param memoryManager A reference to the memory manager
+	 * @throws Exception thrown on any error
+	 * @return the total number of allocated bytes
+	 */	
+	
+	public long testAutoClearedAllocation(final UnsafeDataType udt, final int multiplier, final int loops, final Object[] memoryManager) throws Exception {
+		final long allocSize = udt.size * multiplier;
+		final long address[] = new long[loops];
+		final long sizes[] = new long[loops];		
+		long totalAllocated = 0L;
+		try {
+			for(int loop = 0; loop < loops; loop ++) {	
+				address[loop] = UnsafeAdapter.allocateMemory(allocSize, memoryManager[0]);
+				totalAllocated += allocSize;
+				sizes[loop] = allocSize;				
+				rawCount = rawAllocations.incrementAndGet();				
+				final Object values[] = new Object[multiplier + 1];
+				for(int mult = 0; mult < multiplier; mult++) {
+					Object value = udt.randomValue();
+					values[mult] = value;
+					udt.adapterPut(address[loop] + (mult * udt.size), value);					
+				}
+				for(int mult = 0; mult < multiplier; mult++) {
+					Object adapterValue = udt.adapterGet(address[loop] + (mult * udt.size));
+					Object directValue = udt.unsafeGet(address[loop] + (mult * udt.size));
+					Object actualValue = values[mult];
+					Assert.assertEquals("Adapter Read Value was not [" + actualValue + "]", adapterValue, actualValue);
+					Assert.assertEquals("Unsafe Read Value was not [" + actualValue + "]", directValue, actualValue);
+				}
+				// =======================================================================================
+				// Reallocate and add udt.size to size alloc
+				// =======================================================================================
+				final long newSize = (allocSize + udt.size);				
+				address[loop] = UnsafeAdapter.reallocateMemory(address[loop], newSize, memoryManager[0]);
+				totalAllocated += udt.size;
+				values[multiplier] = udt.randomValue();
+				udt.adapterPut(address[loop] + (multiplier * udt.size), values[multiplier]);
+				for(int mult = 0; mult < multiplier+1; mult++) {
+					Object adapterValue = udt.adapterGet(address[loop] + (mult * udt.size));
+					Object directValue = udt.unsafeGet(address[loop] + (mult * udt.size));
+					Object actualValue = values[mult];
+					Assert.assertEquals("Adapter Read Value was not [" + actualValue + "]", adapterValue, actualValue);
+					Assert.assertEquals("Unsafe Read Value was not [" + actualValue + "]", directValue, actualValue);					
+				}
+				// long trackedValue, long untrackedValue, long allocationCoun
+				validateAllocated(String.format("[testReallocation(%s) loop: %s]", udt.name(), loop), 
+						UnsafeAdapter.getMemoryMBean().isTrackingEnabled() ? UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory() : totalAllocated,
+						-1,
+						loop+1);				
+			}
+			if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+				totalAllocated = UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory();
+			}
+			
+		} finally {
+			
+		}	
+		return totalAllocated;
+	}
+	
+	/**
+	 * Tests a type allocation, write, read and deallocation
+	 * @param udt The data type to test
+	 * @param memoryManager A reference to the memory manager
 	 * @throws Exception thrown on any error
 	 */	
-	@Test	
-	public void testAutoClearedAllocatedLong() throws Exception {
-		DefaultAssignableDeallocatable dealloc = new DefaultAssignableDeallocatable(1); 
-		final long address = UnsafeAdapter.allocateMemory(8, dealloc);
-		long value = nextPosLong();
-		UnsafeAdapter.putLong(address, value);
-		Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getLong(address));
-		Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getLong(address));
-		validateAllocated(8, -1);
-		log("MemoryBean State After Alloc: %s", UnsafeAdapter.getMemoryMBean().getState());
-		dealloc = null;
-		System.gc();
-		sleep(100);
-		log("MemoryBean State After Clear: %s", UnsafeAdapter.getMemoryMBean().getState());
-		validateDeallocated("testAutoClearedAllocatedLong", 0, -1);		
+	public void testAllocated(final UnsafeDataType udt, final Object[] memoryManager) throws Exception {
+		final int multiplier = nextPosInt(100);
+		final int loops = nextPosInt(100);		
+		final long typeSize = testUnsafe.arrayIndexScale(Array.newInstance(udt.primitiveType, 1).getClass());
+		final long expectedAllocation = (multiplier * loops * udt.size);
+		log("Executing Simple Allocation Test: type: [%s], size: [%s], multiplier: [%s], loops: [%s], expected allocation: [%s]", udt.name(), typeSize,  multiplier, loops, expectedAllocation);
+		final long actualAllocation = testAutoClearedAllocation(udt, multiplier, loops, null);
+		Assert.assertEquals("Total Allocation was not [" + expectedAllocation + "]", expectedAllocation, actualAllocation);
 	}
 
+	
 
-    /**
-     * Tests an auto de-allocated boolean memory allocation 
-     * @throws Exception thrown on any error
-     */    
-    @Test    
-    public void testAutoClearedAllocatedBoolean() throws Exception {
-        DefaultAssignableDeallocatable dealloc = new DefaultAssignableDeallocatable(1); 
-        final long address = UnsafeAdapter.allocateMemory(1, dealloc);
-        boolean value = nextBoolean();
-        UnsafeAdapter.putBoolean(address, value);
-        Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getBoolean(address));
-        Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getBoolean(null, address));
-        validateAllocated(1, -1);
-        log("MemoryBean State After Alloc: %s", UnsafeAdapter.getMemoryMBean().getState());
-        dealloc = null;
-        System.gc();
-        sleep(100);
-        log("MemoryBean State After Clear: %s", UnsafeAdapter.getMemoryMBean().getState());
-        validateDeallocated("testAutoClearedAllocatedBoolean", 0, -1);
-    }
-
-
-
-    /**
-     * Tests an auto de-allocated byte memory allocation 
-     * @throws Exception thrown on any error
-     */
-    
-    @Test    
-    public void testAutoClearedAllocatedByte() throws Exception {
-    	DefaultAssignableDeallocatable dealloc = new DefaultAssignableDeallocatable(1); 
-        final long address = UnsafeAdapter.allocateMemory(1, dealloc);
-        byte value = nextPosByte();
-        UnsafeAdapter.putByte(address, value);
-        Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getByte(address));
-        Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getByte(address));
-        validateAllocated(1, -1);
-        log("MemoryBean State After Alloc: %s", UnsafeAdapter.getMemoryMBean().getState());
-        dealloc = null;
-        System.gc();
-        sleep(100);
-        log("MemoryBean State After Clear: %s", UnsafeAdapter.getMemoryMBean().getState());
-        validateDeallocated("testAutoClearedAllocatedByte", 0, -1);    
-    }
-
-
-
-    /**
-     * Tests an auto de-allocated char memory allocation 
-     * @throws Exception thrown on any error
-     */
-    
-    @Test    
-    public void testAutoClearedAllocatedCharacter() throws Exception {
-        //DefaultAssignableDeallocatable dealloc = new DefaultAssignableDeallocatable(1);
-    	AllocationPointer dealloc = UnsafeAdapter.newAllocationPointer();
-        final long address = UnsafeAdapter.allocateMemory(2, dealloc);
-        char value = nextCharacter();
-        UnsafeAdapter.putChar(address, value);
-        Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getChar(address));
-        Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getChar(address));
-        validateAllocated(2, -1);
-        log("MemoryBean State After Alloc: %s", UnsafeAdapter.getMemoryMBean().getState());
-        dealloc = null;
-        System.gc();
-        sleep(100, 100000);
-        log("MemoryBean State After Clear: %s", UnsafeAdapter.getMemoryMBean().getState());
-        validateDeallocated("testAutoClearedAllocatedCharacter", 0, -1);    
-    }
-
-
-
-    /**
-     * Tests an auto de-allocated short memory allocation 
-     * @throws Exception thrown on any error
-     */
-    
-    @Test    
-    public void testAutoClearedAllocatedShort() throws Exception {
-        DefaultAssignableDeallocatable dealloc = new DefaultAssignableDeallocatable(1); 
-        final long address = UnsafeAdapter.allocateMemory(2, dealloc);
-        short value = nextPosShort();
-        UnsafeAdapter.putShort(address, value);
-        Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getShort(address));
-        Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getShort(address));
-        validateAllocated(2, -1);
-        log("MemoryBean State After Alloc: %s", UnsafeAdapter.getMemoryMBean().getState());
-        dealloc = null;
-        System.gc();
-        sleep(100);
-        log("MemoryBean State After Clear: %s", UnsafeAdapter.getMemoryMBean().getState());
-        validateDeallocated("testAutoClearedAllocatedShort", 0, -1);     
-    }
-
-
-
-    /**
-     * Tests an auto de-allocated int memory allocation 
-     * @throws Exception thrown on any error
-     */
-    
-    @Test    
-    public void testAutoClearedAllocatedInteger() throws Exception {
-        DefaultAssignableDeallocatable dealloc = new DefaultAssignableDeallocatable(1); 
-        final long address = UnsafeAdapter.allocateMemory(4, dealloc);
-        int value = nextPosInteger();
-        UnsafeAdapter.putInt(address, value);
-        Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getInt(address));
-        Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getInt(address));
-        validateAllocated(4, -1);
-        log("MemoryBean State After Alloc: %s", UnsafeAdapter.getMemoryMBean().getState());
-        dealloc = null;
-        System.gc();
-        sleep(100);
-        log("MemoryBean State After Clear: %s", UnsafeAdapter.getMemoryMBean().getState());
-        validateDeallocated("testAutoClearedAllocatedInteger", 0, -1);       
-    }
-
-
-
-    /**
-     * Tests an auto de-allocated float memory allocation 
-     * @throws Exception thrown on any error
-     */
-    
-    @Test    
-    public void testAutoClearedAllocatedFloat() throws Exception {
-        DefaultAssignableDeallocatable dealloc = new DefaultAssignableDeallocatable(1); 
-        final long address = UnsafeAdapter.allocateMemory(4, dealloc);
-        float value = nextPosFloat();
-        UnsafeAdapter.putFloat(address, value);
-        Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getFloat(address), 0f);
-        Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getFloat(address), 0f);
-        validateAllocated(4, -1);
-        log("MemoryBean State After Alloc: %s", UnsafeAdapter.getMemoryMBean().getState());
-        dealloc = null;
-        System.gc();
-        sleep(100, 1000000);
-        log("MemoryBean State After Clear: %s", UnsafeAdapter.getMemoryMBean().getState());
-        validateDeallocated("testAutoClearedAllocatedFloat", 0, -1);        
-    }
-
-
-
-    /**
-     * Tests an auto de-allocated double memory allocation 
-     * @throws Exception thrown on any error
-     */
-    
-    @Test    
-    public void testAutoClearedAllocatedDouble() throws Exception {
-        DefaultAssignableDeallocatable dealloc = new DefaultAssignableDeallocatable(1); 
-        final long address = UnsafeAdapter.allocateMemory(4, dealloc);
-        double value = nextPosDouble();
-        UnsafeAdapter.putDouble(address, value);
-        Assert.assertEquals("Value was not [" + value + "]", value, UnsafeAdapter.getDouble(address), 0d);
-        Assert.assertEquals("Value was not [" + value + "]", value, testUnsafe.getDouble(address), 0d);
-        validateAllocated(4, -1);
-        log("MemoryBean State After Alloc: %s", UnsafeAdapter.getMemoryMBean().getState());
-        dealloc = null;
-        System.gc();
-        sleep(100);
-        log("MemoryBean State After Clear: %s", UnsafeAdapter.getMemoryMBean().getState());
-        validateDeallocated("testAutoClearedAllocatedDouble", 0, -1);  
-    }
+//	final long allocSize = udt.size * multiplier;
+//	final long address[] = new long[loops];
+//	final long sizes[] = new long[loops];		
+//	long totalAllocated = 0L;
+//	try {
+//		for(int loop = 0; loop < loops; loop ++) {	
+//			address[loop] = UnsafeAdapter.allocateMemory(allocSize);
+//			totalAllocated += allocSize;
+//			sizes[loop] = allocSize;				
+//			rawCount = rawAllocations.incrementAndGet();				
+//			final Object values[] = new Object[multiplier + 1];
+//			for(int mult = 0; mult < multiplier; mult++) {
+//				Object value = udt.randomValue();
+//				values[mult] = value;
+//				udt.adapterPut(address[loop] + (mult * udt.size), value);					
+//			}
+//			for(int mult = 0; mult < multiplier; mult++) {
+//				Object adapterValue = udt.adapterGet(address[loop] + (mult * udt.size));
+//				Object directValue = udt.unsafeGet(address[loop] + (mult * udt.size));
+//				Object actualValue = values[mult];
+//				Assert.assertEquals("Adapter Read Value was not [" + actualValue + "]", adapterValue, actualValue);
+//				Assert.assertEquals("Unsafe Read Value was not [" + actualValue + "]", directValue, actualValue);
+//			}
+//			// =======================================================================================
+//			// Reallocate and add udt.size to size alloc
+//			// =======================================================================================
+//			final long newSize = (allocSize + udt.size);				
+//			address[loop] = UnsafeAdapter.reallocateMemory(address[loop], newSize);
+//			totalAllocated += udt.size;
+//			values[multiplier] = udt.randomValue();
+//			udt.adapterPut(address[loop] + (multiplier * udt.size), values[multiplier]);
+//			for(int mult = 0; mult < multiplier+1; mult++) {
+//				Object adapterValue = udt.adapterGet(address[loop] + (mult * udt.size));
+//				Object directValue = udt.unsafeGet(address[loop] + (mult * udt.size));
+//				Object actualValue = values[mult];
+//				Assert.assertEquals("Adapter Read Value was not [" + actualValue + "]", adapterValue, actualValue);
+//				Assert.assertEquals("Unsafe Read Value was not [" + actualValue + "]", directValue, actualValue);					
+//			}
+//			// long trackedValue, long untrackedValue, long allocationCoun
+//			validateAllocated(String.format("[testReallocation(%s) loop: %s]", udt.name(), loop), 
+//					UnsafeAdapter.getMemoryMBean().isTrackingEnabled() ? UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory() : totalAllocated,
+//					-1,
+//					loop+1);				
+//		}
+//		if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
+//			totalAllocated = UnsafeAdapter.getMemoryMBean().getTotalAllocatedMemory();
+//		}
+//		
+//	} finally {
+//		for(int loop = 0; loop < loops; loop ++) {	
+//			UnsafeAdapter.freeMemory(address[loop]);
+//		}
+//		validateDeallocated(String.format("[testAllocation(%s) Final]", udt.name()), 0, -1);
+//	}	
+//	return totalAllocated;
 
 
 	

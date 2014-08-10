@@ -224,6 +224,26 @@ public class UnsafeAdapter {
 		return adapter.refMgr.newAllocationPointer();
 	}
 	
+	/**
+	 * Returns a new {@link AllocationPointer} that is ref queue registered 
+	 * and configured according to mem tracking and mem alignment settings. 
+	 * @param onClearRunnable An optional on clear runnable
+	 * @return a new AllocationPointer
+	 */
+	public final AllocationPointer newAllocationPointer(final Runnable onClearRunnable) {
+		return adapter.refMgr.newAllocationPointer(onClearRunnable);
+	}
+	
+	/**
+	 * Registers an AllocationPointer on clear runnable.
+	 * Throws a runime exception if the ref id does not belong to a registered AP.
+	 * @param refId The reference id of the AllocationPointer
+	 * @param runnable The runnable to register (ignored if null)
+	 */
+	public final void registerOnClearRunnable(final long refId, final Runnable runnable) {
+		adapter.refMgr.registerOnClearRunnable(refId, runnable);
+	}
+	
 	// =====================================================================================================
 	// Configuration reads
 	// =====================================================================================================
@@ -846,6 +866,22 @@ public class UnsafeAdapter {
 	public static long reallocateMemory(long address, long size) {
 		return adapter.reallocateMemory(address, size);
 	}
+	
+	/**
+	 * Resizes a new block of native memory, to the given size in bytes. 
+	 * <b>NOTE:</b>If the caller implements {@link Deallocatable} and expects the allocations
+	 * to be automatically cleared, the returned value should overwrite the index of 
+	 * the {@link Deallocatable}'s array where the previous address was.   
+	 * @param address The address of the existing allocation
+	 * @param size The size of the new allocation in bytes
+	 * @param memoryManager The object to handle memory management of the allocated memory block
+	 * @return The address of the new allocation
+	 * @see sun.misc.Unsafe#reallocateMemory(long, long)
+	 */
+	public static long reallocateMemory(long address, long size, Object memoryManager) {
+		return adapter.reallocateMemory(address, size);
+	}
+	
 	
 	/**
 	 * Resizes a new block of aligned (if enabled) native memory, to the given size in bytes.
