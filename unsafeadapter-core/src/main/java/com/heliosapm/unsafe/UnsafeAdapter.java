@@ -230,7 +230,7 @@ public class UnsafeAdapter {
 	 * @param onClearRunnable An optional on clear runnable
 	 * @return a new AllocationPointer
 	 */
-	public final AllocationPointer newAllocationPointer(final Runnable onClearRunnable) {
+	public static final AllocationPointer newAllocationPointer(final Runnable onClearRunnable) {
 		return adapter.refMgr.newAllocationPointer(onClearRunnable);
 	}
 	

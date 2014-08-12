@@ -255,15 +255,15 @@ public class AllocationReferenceManager implements Runnable {
 					final long refId = appr.getReferenceId();
 					trackedRefs.remove(refId);	
 					appr.clear();
-					log("Dequeued Appr [%s]", ref);
+//					log("Dequeued Appr [%s]", ref);
 					long[][] cleared = appr.getClearedAddresses();
-					log("Cleared Appr [%s]", Arrays.deepToString(cleared));
+//					log("Cleared Appr [%s]", Arrays.deepToString(cleared));
 					if(cleared!=null && cleared.length>0) {
 						long[] totals = decrement(cleared);
 						cleared = null;
 						decrement(totals[0], totals[1]);
 					}
-					final RunnableSequence rs = onRefClearRunnables.get(refId);
+					final RunnableSequence rs = onRefClearRunnables.remove(refId);
 					if(rs != null) rs.run();  // FIXME:  hand this off to a pool ?
 //					ref.clear();
 					refsCleared.increment();

@@ -32,6 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.heliosapm.unsafe.ReflectionHelper;
@@ -47,11 +48,11 @@ import com.heliosapm.unsafe.UnsafeAdapter;
 @SuppressWarnings("restriction")
 @UnsafeAdapterConfiguration()
 public class BasicAllocationsTest extends BaseTest {
-	/** Keeps a count of raw (unmanaged) memory allocations through UnsafeAdapter */
-	protected final AtomicInteger rawAllocations = new AtomicInteger(0);
-	
-	/** A snapshot of the raw allocation count so we can verify it */
-	protected int rawCount = -1;
+//	/** Keeps a count of raw (unmanaged) memory allocations through UnsafeAdapter */
+//	protected final AtomicInteger rawAllocations = new AtomicInteger(0);
+//	
+//	/** A snapshot of the raw allocation count so we can verify it */
+//	protected int rawCount = -1;
 
 	
 	
@@ -61,11 +62,12 @@ public class BasicAllocationsTest extends BaseTest {
 	 */
 	@Before
 	public void beforeTest() {
-		if(DEBUG_AGENT_LOADED) {
+//		rawAllocations.set(0);
+//		if(DEBUG_AGENT_LOADED) {
 			if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
-				ReflectionHelper.invoke(UnsafeAdapter.class, "resetRefMgr");
+				//ReflectionHelper.invoke(UnsafeAdapter.class, "resetRefMgr");
 			}
-		}
+//		}
 	}
 	
 	/**
@@ -96,7 +98,7 @@ public class BasicAllocationsTest extends BaseTest {
 			for(int loop = 0; loop < loops; loop ++) {				
 				address[loop] = UnsafeAdapter.allocateMemory(allocSize);
 				totalAllocated += allocSize;
-				rawCount = rawAllocations.incrementAndGet();
+//				rawCount = rawAllocations.incrementAndGet();
 				long currentAddress = address[loop];
 				for(int i = 0; i < multiplier; i++) {
 					Object value = udt.randomValue();
@@ -138,17 +140,20 @@ public class BasicAllocationsTest extends BaseTest {
 		final long sizes[] = new long[loops];		
 		long totalAllocated = 0L;
 		try {
-			for(int loop = 0; loop < loops; loop ++) {	
+			for(int loop = 0; loop < loops; loop ++) {
+				// Allocate
 				address[loop] = UnsafeAdapter.allocateMemory(allocSize);
 				totalAllocated += allocSize;
 				sizes[loop] = allocSize;				
-				rawCount = rawAllocations.incrementAndGet();				
+//				rawCount = rawAllocations.incrementAndGet();				
 				final Object values[] = new Object[multiplier + 1];
+				//  Write Values
 				for(int mult = 0; mult < multiplier; mult++) {
 					Object value = udt.randomValue();
 					values[mult] = value;
 					udt.adapterPut(address[loop] + (mult * udt.size), value);					
 				}
+				// Read values and verify
 				for(int mult = 0; mult < multiplier; mult++) {
 					Object adapterValue = udt.adapterGet(address[loop] + (mult * udt.size));
 					Object directValue = udt.unsafeGet(address[loop] + (mult * udt.size));
@@ -224,28 +229,28 @@ public class BasicAllocationsTest extends BaseTest {
 	
 	
 	
-	/**
-	 * Tests data allocation, write, read and deallocation for all unsafe data types
-	 * @throws Exception thrown on any error
-	 */
-	@Test
-	public void testSimpleAllocationDeallocation() throws Exception {
-		for(UnsafeDataType udt: UnsafeDataType.values()) {
-			testAllocated(udt);
-		}
-	}
-	
-	/**
-	 * Tests data allocation, write, read and deallocation for all unsafe data types
-	 * @throws Exception thrown on any error
-	 */
-	@Test
-	public void testSimpleReallocationDeallocation() throws Exception {
-		for(UnsafeDataType udt: UnsafeDataType.values()) {
-			testReallocated(udt);
-			break;
-		}		
-	}
+//	/**
+//	 * Tests data allocation, write, read and deallocation for all unsafe data types
+//	 * @throws Exception thrown on any error
+//	 */
+//	@Test
+//	public void testSimpleAllocationDeallocation() throws Exception {
+//		for(UnsafeDataType udt: UnsafeDataType.values()) {
+//			testAllocated(udt);
+//		}
+//	}
+//	
+//	/**
+//	 * Tests data allocation, write, read and deallocation for all unsafe data types
+//	 * @throws Exception thrown on any error
+//	 */
+//	@Test
+//	public void testSimpleReallocationDeallocation() throws Exception {
+//		for(UnsafeDataType udt: UnsafeDataType.values()) {
+//			testReallocated(udt);
+//			break;
+//		}		
+//	}
 
 	/**
 	 * Tests data allocation, write, read, and deallocation for booleans

@@ -25,15 +25,16 @@
 package test.com.heliosapm.unsafe;
 
 import java.lang.reflect.Array;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
-import com.heliosapm.unsafe.AllocationPointer;
-import com.heliosapm.unsafe.DefaultAssignableDeallocatable;
 import com.heliosapm.unsafe.ReflectionHelper;
 import com.heliosapm.unsafe.UnsafeAdapter;
 
@@ -44,15 +45,11 @@ import com.heliosapm.unsafe.UnsafeAdapter;
  * @author Whitehead (nwhitehead AT heliosdev DOT org)
  * <p><code>test.com.heliosapm.unsafe.AutoDeallocationTest</code></p>
  */
-@UnsafeAdapterConfiguration(memTracking=true)
+@UnsafeAdapterConfiguration(memTracking=false)
 @SuppressWarnings("restriction")
+@Ignore
 public class AutoDeallocationTest extends BaseTest {
 	
-	/** Keeps a count of raw (unmanaged) memory allocations through UnsafeAdapter */
-	protected final AtomicInteger rawAllocations = new AtomicInteger(0);
-	
-	/** A snapshot of the raw allocation count so we can verify it */
-	protected int rawCount = -1;
 
 	
 	
@@ -64,7 +61,7 @@ public class AutoDeallocationTest extends BaseTest {
 	public void beforeTest() {
 		if(DEBUG_AGENT_LOADED) {
 			if(UnsafeAdapter.getMemoryMBean().isTrackingEnabled()) {
-				ReflectionHelper.invoke(UnsafeAdapter.class, "resetRefMgr");
+				//ReflectionHelper.invoke(UnsafeAdapter.class, "resetRefMgr");
 			}
 		}
 	}
@@ -102,8 +99,7 @@ public class AutoDeallocationTest extends BaseTest {
 			for(int loop = 0; loop < loops; loop ++) {	
 				address[loop] = UnsafeAdapter.allocateMemory(allocSize, memoryManager[0]);
 				totalAllocated += allocSize;
-				sizes[loop] = allocSize;				
-				rawCount = rawAllocations.incrementAndGet();				
+				sizes[loop] = allocSize;									
 				final Object values[] = new Object[multiplier + 1];
 				for(int mult = 0; mult < multiplier; mult++) {
 					Object value = udt.randomValue();
@@ -158,12 +154,48 @@ public class AutoDeallocationTest extends BaseTest {
 		final int multiplier = nextPosInt(100);
 		final int loops = nextPosInt(100);		
 		final long typeSize = testUnsafe.arrayIndexScale(Array.newInstance(udt.primitiveType, 1).getClass());
-		final long expectedAllocation = (multiplier * loops * udt.size);
+		final long expectedAllocation = (multiplier * loops * udt.size)  + (loops * udt.size);
 		log("Executing Simple Allocation Test: type: [%s], size: [%s], multiplier: [%s], loops: [%s], expected allocation: [%s]", udt.name(), typeSize,  multiplier, loops, expectedAllocation);
-		final long actualAllocation = testAutoClearedAllocation(udt, multiplier, loops, null);
+		final long actualAllocation = testAutoClearedAllocation(udt, multiplier, loops, memoryManager);
 		Assert.assertEquals("Total Allocation was not [" + expectedAllocation + "]", expectedAllocation, actualAllocation);
 	}
 
+	/**
+	 * Tests a type allocation, write, read and deallocation
+	 * @param udt The data type to test
+	 * @throws Exception thrown on any error
+	 */
+	public void testWithAllocationPointer(final UnsafeDataType udt) throws Exception {
+		final CountDownLatch latch = new CountDownLatch(1);
+		final Runnable r = new Runnable() {
+			public void run() {
+				latch.countDown();
+			}
+		};
+		Object[] memoryManager = new Object[] { UnsafeAdapter.newAllocationPointer(r) };
+		testAllocated(udt, memoryManager);
+		memoryManager[0] = null;
+		if(!latch.await(100, TimeUnit.MILLISECONDS)) {
+			log("PHANTOM still here. Call GC.");
+			System.gc();
+		}
+		final boolean collected = latch.await(100, TimeUnit.MILLISECONDS);
+		sleep(1, 10000000);
+		Assert.assertTrue("AllocationPointer Not Collected", collected);
+		validateDeallocated(String.format("[testWithAllocationPointer(%s) Final]", udt.name()), 0, -1);		
+	}
+	
+	/**
+	 * Tests data allocation, write, read, and auto-deallocation for booleans
+	 * @throws Exception thrown on any error
+	 */
+	@Test
+	//@Ignore
+	public void testXAllocationDeallocation() throws Exception {
+		for(UnsafeDataType udt: UnsafeDataType.values()) {
+			testWithAllocationPointer(udt);
+		}
+	}	
 	
 
 //	final long allocSize = udt.size * multiplier;

@@ -119,7 +119,9 @@ class AllocationPointerPhantomRef extends PhantomReference<AllocationPointer> im
 	public void clear() {
 		System.out.println("CLEARING PHANTOM...");
 		if(address > 0) {
+			System.out.println("Clearing ...");
 			clearedAddresses = AllocationPointerOperations.free(address, true);
+			System.out.println("Cleared [" +  clearedAddresses.length + "] addresses");
 			Arrays.sort(clearedAddresses, CSORT);
 			address = 0;
 		} else {
