@@ -47,7 +47,7 @@ import com.heliosapm.unsafe.UnsafeAdapter;
  */
 @UnsafeAdapterConfiguration(memTracking=false)
 @SuppressWarnings("restriction")
-@Ignore
+//@Ignore
 public class AutoDeallocationTest extends BaseTest {
 	
 
