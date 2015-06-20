@@ -157,6 +157,7 @@ public class AutoDeallocationTest extends BaseTest {
 		final long expectedAllocation = (multiplier * loops * udt.size)  + (loops * udt.size);
 		log("Executing Simple Allocation Test: type: [%s], size: [%s], multiplier: [%s], loops: [%s], expected allocation: [%s]", udt.name(), typeSize,  multiplier, loops, expectedAllocation);
 		final long actualAllocation = testAutoClearedAllocation(udt, multiplier, loops, memoryManager);
+		log("Expected Allocation [%s], Actual [%s]", expectedAllocation, actualAllocation);
 		Assert.assertEquals("Total Allocation was not [" + expectedAllocation + "]", expectedAllocation, actualAllocation);
 	}
 
